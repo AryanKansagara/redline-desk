@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { bySeverity } from './engine/analyze.ts'
-import { clauseLabel, clauseText } from './engine/segment.ts'
+import { clauseLabel } from './engine/segment.ts'
 import { useComparison, useProject, useTracker } from './projectData.ts'
 import { getDefaults } from './store.ts'
 import { Link, NotFound } from './ui.tsx'
@@ -55,7 +55,7 @@ export default function Print({ id, kind }: { id: string; kind: 'memo' | 'redlin
               return (
                 <section key={i}>
                   <h3>{clauseLabel((cb ?? ca)!)} {r.pair.moved && <span className="badge moved">moved</span>}{r.pair.renumbered && ca?.num && cb && <span className="muted small"> (was {ca.num})</span>}</h3>
-                  <p>{r.pair.ops ? r.pair.ops.map((o, k) => o.t === 'eq' ? <span key={k}>{o.s}</span> : o.t === 'ins' ? <ins key={k}>{o.s}</ins> : <del key={k}>{o.s}</del>) : r.pair.a === null ? <ins>{clauseText(cb!)}</ins> : r.pair.b === null ? <del>{clauseText(ca!)}</del> : clauseText(cb!)}</p>
+                  <p>{r.pair.ops ? r.pair.ops.map((o, k) => o.t === 'eq' ? <span key={k}>{o.s}</span> : o.t === 'ins' ? <ins key={k}>{o.s}</ins> : <del key={k}>{o.s}</del>) : r.pair.a === null ? <ins>{cb!.body}</ins> : r.pair.b === null ? <del>{ca!.body}</del> : cb!.body}</p>
                 </section>
               )
             })}

@@ -9,7 +9,10 @@ export interface Pair {
   modified: boolean
   moved: boolean
   renumbered: boolean
+  /** Word diff of the clause body. */
   ops?: Op[]
+  /** Previous title, when the title changed. */
+  titleWas?: string
 }
 
 /** A row in the side-by-side view. `ghost` marks where a moved clause used to be. */
@@ -84,7 +87,7 @@ export function align(A: Clause[], B: Clause[]): Pair[] {
   matched.forEach((i, idx) => {
     const j = matchA[i], a = A[i], b = B[j]
     const modified = norm(a.body) !== norm(b.body) || norm(a.title) !== norm(b.title)
-    pairs.push({ a: i, b: j, sim: sims.get(`${i}:${j}`) ?? 1, modified, moved: !keep.has(idx), renumbered: (a.num ?? '') !== (b.num ?? ''), ops: modified ? diffWords([a.title, a.body].filter(Boolean).join('. '), [b.title, b.body].filter(Boolean).join('. ')) : undefined })
+    pairs.push({ a: i, b: j, sim: sims.get(`${i}:${j}`) ?? 1, modified, moved: !keep.has(idx), renumbered: (a.num ?? '') !== (b.num ?? ''), ops: modified ? diffWords(a.body, b.body) : undefined, titleWas: norm(a.title) !== norm(b.title) ? a.title : undefined })
   })
   A.forEach((_, i) => { if (matchA[i] < 0) pairs.push({ a: i, b: null, sim: 0, modified: true, moved: false, renumbered: false }) })
   B.forEach((_, j) => { if (matchB[j] < 0) pairs.push({ a: null, b: j, sim: 0, modified: true, moved: false, renumbered: false }) })

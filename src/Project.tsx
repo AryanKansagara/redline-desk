@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { issuesCsv, type Comparison, type Issue, type TrackedIssue } from './engine/analyze.ts'
 import type { Op } from './engine/diff.ts'
 import { clonePlaybook, playbookById, STARTER_PLAYBOOKS, type Rule, type RuleSpec, type Severity } from './engine/playbook.ts'
-import { clauseLabel, clauseText, segment, type Clause } from './engine/segment.ts'
+import { clauseLabel, segment, type Clause } from './engine/segment.ts'
 import { termReport } from './engine/terms.ts'
 import { checkRefs } from './engine/xref.ts'
 import { ImportVersion } from './Import.tsx'
@@ -146,6 +146,7 @@ function CompareTab({ cmp, p }: { cmp: Comparison; p: Project }) {
           const badges = <>
             {pair.moved && !r.ghost && <span className="badge moved">Moved from {a?.num ? '§ ' + a.num : 'elsewhere'}</span>}
             {pair.renumbered && !pair.moved && a?.num && b && <span className="badge">Was § {a.num}</span>}
+            {pair.titleWas !== undefined && b && <span className="badge">Title was “{pair.titleWas || 'none'}”</span>}
             {pair.a === null && <span className="badge ins">Inserted</span>}
             {pair.b === null && <span className="badge del">Deleted</span>}
             {qs.map((q, k) => <span key={k} className="badge num" title={`${q.kind} changed`}>{q.before ?? '—'} → {q.after ?? '—'}</span>)}
@@ -155,15 +156,15 @@ function CompareTab({ cmp, p }: { cmp: Comparison; p: Project }) {
               <div className="cell">
                 <h4>{b ? clauseLabel(b) : a ? clauseLabel(a) : ''} {badges}</h4>
                 {r.ghost ? <p className="muted small">Moved to {cmp.b.clauses[pair.b!].num ? '§ ' + cmp.b.clauses[pair.b!].num : 'a new position'}.</p>
-                  : pair.ops ? <p><Ops ops={pair.ops} side="inline" /></p> : <p>{pair.a === null ? <ins>{clauseText(b!)}</ins> : pair.b === null ? <del>{clauseText(a!)}</del> : clauseText(b!)}</p>}
+                  : pair.ops ? <p><Ops ops={pair.ops} side="inline" /></p> : <p>{pair.a === null ? <ins>{b!.body}</ins> : pair.b === null ? <del>{a!.body}</del> : b!.body}</p>}
               </div>
               <Flags list={fl} />
             </article>
           )
           return (
             <article key={i} className={`cmp-row ${tag}`} id={b ? `clause-${b.id}` : undefined}>
-              <div className="cell a">{a && !(pair.moved && !r.ghost) ? <><h4>{clauseLabel(a)}</h4><p>{pair.ops ? <Ops ops={pair.ops} side="a" /> : pair.b === null ? <del>{clauseText(a)}</del> : clauseText(a)}</p></> : pair.moved && !r.ghost ? <p className="muted small moved-note">↑ came from {a?.num ? '§ ' + a.num : 'earlier'}</p> : null}</div>
-              <div className="cell b">{r.ghost ? <p className="muted small moved-note">↓ moved to {cmp.b.clauses[pair.b!].num ? '§ ' + cmp.b.clauses[pair.b!].num : 'later'}</p> : b ? <><h4>{clauseLabel(b)} {badges}</h4><p>{pair.ops ? <Ops ops={pair.ops} side="b" /> : pair.a === null ? <ins>{clauseText(b)}</ins> : clauseText(b)}</p></> : <p className="muted small">Not in this version.</p>}</div>
+              <div className="cell a">{a && !(pair.moved && !r.ghost) ? <><h4>{clauseLabel(a)}</h4><p>{pair.ops ? <Ops ops={pair.ops} side="a" /> : pair.b === null ? <del>{a.body}</del> : a.body}</p></> : pair.moved && !r.ghost ? <p className="muted small moved-note">↑ came from {a?.num ? '§ ' + a.num : 'earlier'}</p> : null}</div>
+              <div className="cell b">{r.ghost ? <p className="muted small moved-note">↓ moved to {cmp.b.clauses[pair.b!].num ? '§ ' + cmp.b.clauses[pair.b!].num : 'later'}</p> : b ? <><h4>{clauseLabel(b)} {badges}</h4><p>{pair.ops ? <Ops ops={pair.ops} side="b" /> : pair.a === null ? <ins>{b.body}</ins> : b.body}</p></> : <p className="muted small">Not in this version.</p>}</div>
               <Flags list={fl} />
             </article>
           )

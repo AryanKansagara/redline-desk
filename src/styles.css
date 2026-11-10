@@ -188,7 +188,7 @@ table.compact th { padding: 7px 8px; }
 .lc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px var(--good-bg); }
 .lc-stats { margin-left: auto; color: var(--ink-3); }
 .lc-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1.25fr); padding: 14px; }
-.lc-col { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; position: relative; z-index: 1; }
+.lc-col { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; position: relative; z-index: 1; }
 .lc-item { position: relative; display: flex; align-items: center; font-size: 13px; min-height: 30px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); padding: 0 8px; white-space: nowrap; overflow: visible; transition: transform 1.1s var(--ease), opacity .5s var(--ease), border-color .3s, background-color .3s; }
 .lc-col.a .lc-item { overflow: hidden; text-overflow: ellipsis; }
 .lc-item button { all: unset; display: flex; align-items: center; gap: 0; width: 100%; cursor: pointer; min-height: 30px; overflow: hidden; }
@@ -202,7 +202,7 @@ table.compact th { padding: 7px 8px; }
 .lc-delta i { font-style: normal; color: var(--ins); }
 .lc-delta s { text-decoration: none; color: var(--del); }
 .lc-flags { position: absolute; right: -6px; top: 50%; transform: translate(100%, -50%); display: flex; gap: 4px; pointer-events: none; }
-.lc-flag { font: 600 9.5px/1 var(--font-sans); text-transform: uppercase; letter-spacing: .04em; padding: 4px 5px; border-radius: 3px; white-space: nowrap; transition: opacity .5s var(--ease), transform .5s var(--ease); }
+.lc-flag { max-width: 128px; overflow: hidden; text-overflow: ellipsis; font: 600 9.5px/1 var(--font-sans); text-transform: uppercase; letter-spacing: .04em; padding: 4px 5px; border-radius: 3px; white-space: nowrap; transition: opacity .5s var(--ease), transform .5s var(--ease); }
 .lc-flag.sev-high { background: var(--high); color: #fff; }
 .lc-flag.sev-medium { background: var(--hl); color: var(--hl-ink); }
 .lc-grid { padding-right: 150px; }
@@ -415,7 +415,7 @@ details summary { cursor: pointer; font-size: 14px; }
   .feature-grid { grid-template-columns: 1fr; }
   .lc-grid { padding: 10px 10px 10px; grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.15fr); }
   .lc-flags { position: static; transform: none; margin-left: 4px; }
-  .lc-col.b .lc-item { flex-wrap: wrap; padding: 4px 6px; }
+  .lc-col.b .lc-item { flex-wrap: wrap; padding: 4px 6px; overflow: hidden; }
   .lc-col.b .lc-item button { min-height: 22px; }
   .lc-flag { font-size: 8.5px; }
   .lc-item { font-size: 12px; }
