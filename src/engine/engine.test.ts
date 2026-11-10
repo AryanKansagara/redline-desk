@@ -211,6 +211,7 @@ test('required and forbidden rules', () => {
   const c = doc('1. Changes. Provider may modify these terms at any time.')
   assert.equal(checkRule(rule({ kind: 'forbidden', phrases: ['may modify these terms at any time'] }), c)[0].status, 'fail')
   assert.equal(checkRule(rule({ kind: 'required', match: 'service level' }), c)[0].status, 'fail')
+  assert.equal(checkRule(rule({ kind: 'required', match: 'modify (these' }), c)[0].status, 'fail', 'invalid regex is matched literally, not thrown')
   assert.equal(STARTER_PLAYBOOKS.length, 3)
 })
 

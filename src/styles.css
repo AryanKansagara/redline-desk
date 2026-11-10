@@ -321,7 +321,7 @@ tr.bad td { background: var(--del-bg); }
 .rule.off { opacity: .55; }
 .rule-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .rule-head .rule-name { flex: 1 1 220px; width: auto; font-weight: 500; }
-.rule-head select { width: auto; }
+.rule-head select, .row > select, .row.gap-sm > select { width: auto; }
 
 /* ---------- Import ---------- */
 .drop { display: grid; place-items: center; gap: 6px; text-align: center; padding: 34px 18px; border: 1px dashed var(--border); border-radius: var(--r-lg); cursor: pointer; transition: border-color .2s, background-color .2s; position: relative; }

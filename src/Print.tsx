@@ -37,7 +37,7 @@ export default function Print({ id, kind }: { id: string; kind: 'memo' | 'redlin
         {kind === 'memo' ? (
           <>
             <h2>Summary</h2>
-            <p>{cmp.summary.modified} clauses modified, {cmp.summary.moved} moved, {cmp.summary.inserted} inserted and {cmp.summary.deleted} deleted. {issues.filter(i => i.severity === 'high').length} high-severity issues, {issues.filter(i => i.severity === 'medium').length} medium, {issues.filter(i => i.severity === 'low').length} low.</p>
+            <p>{cmp.summary.modified} clauses modified, {cmp.summary.moved} moved, {cmp.summary.inserted} inserted and {cmp.summary.deleted} deleted. {issues.filter(i => i.severity === 'high').length} high-severity, {issues.filter(i => i.severity === 'medium').length} medium, {issues.filter(i => i.severity === 'low').length} low.</p>
             <h2>Issues and proposed fallbacks</h2>
             <table className="memo-table">
               <thead><tr><th>#</th><th>Clause</th><th>Issue</th><th>Proposed fallback</th></tr></thead>

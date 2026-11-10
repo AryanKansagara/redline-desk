@@ -34,6 +34,8 @@ const firstDuration = (s: string): { days: number; raw: string } | null => {
   return null
 }
 const months = (days: number) => Math.round(days / 30.4)
+/** User-typed patterns: fall back to a literal match if the regular expression is invalid. */
+const userRe = (src: string) => { try { return new RegExp(src, 'i') } catch { return new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
 
 /** Parses a liability cap: months of fees, a multiple of annual fees, or a fixed amount. */
 export function parseCap(text: string): { months?: number; amount?: number; raw: string } | null {
@@ -65,7 +67,7 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
   const all = clauses.map(c => c.title + '. ' + c.body).join('\n')
   switch (r.kind) {
     case 'required': {
-      const re = new RegExp(r.match, 'i')
+      const re = userRe(r.match)
       const c = titleOrBody(clauses, re)[0]
       return [c ? pass(r, c, 'Present.') : fail(r, null, `No clause matches “${r.name}”.`)]
     }
@@ -88,7 +90,7 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
       return [fail(r, cs[0] ?? null, cs.length ? 'Liability clause found but no cap amount could be read.' : 'No limitation of liability clause found.')]
     }
     case 'duration': {
-      const re = new RegExp(r.match, 'i')
+      const re = userRe(r.match)
       for (const c of clauses) for (const s of sentences(c.body)) {
         if (!re.test(s) && !re.test(c.title)) continue
         if (/perpetu|indefinite|in perpetuity/i.test(s) && r.maxMonths !== undefined) return [fail(r, c, `Runs indefinitely; playbook maximum is ${r.maxMonths} months.`)]
