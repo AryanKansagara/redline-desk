@@ -2,7 +2,7 @@
 
 Contract version comparison and playbook review that works without Word track-changes and without sending documents to a server.
 
-**Live:** https://redline-desk.vercel.app
+**Live:** https://redline-desk-beta.vercel.app
 
 ## The problem
 
