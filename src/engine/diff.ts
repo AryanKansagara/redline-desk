@@ -9,7 +9,7 @@ export const tokenize = (s: string): string[] => s.match(/\s+|[\p{L}\p{N}$€£%
 export function myers(a: string[], b: string[]): Op[] {
   const n = a.length, m = b.length, max = n + m
   const off = max + 1
-  let v = new Int32Array(2 * max + 3)
+  let v: Int32Array = new Int32Array(2 * max + 3)
   const trace: Int32Array[] = []
   let done = false
   for (let d = 0; d <= max && !done; d++) {

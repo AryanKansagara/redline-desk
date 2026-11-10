@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-default-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redline Desk: compare contract versions and check them against your playbook</title>
+    <meta name="description" content="Clause-aware comparison of any two contract versions (DOCX, PDF or text), moved clauses, broken defined terms and cross-references, playbook review and DOCX redlines. Runs in your browser." />
+    <meta name="theme-color" content="#0f0e0d" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='5' fill='%230f0e0d'/><rect x='4' y='20' width='24' height='5' rx='1' fill='%23f6f202'/><text x='16' y='22' font-family='Georgia,serif' font-size='16' font-style='italic' text-anchor='middle' fill='%23fafaf9'>Rd</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search).get('mode')
+        var m = q === 'light' || q === 'dark' ? q : localStorage.getItem('themeMode')
+        document.documentElement.dataset.themeMode = m === 'light' || m === 'dark' ? m : document.documentElement.dataset.defaultMode
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

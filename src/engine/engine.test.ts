@@ -44,6 +44,12 @@ test('warns about duplicate numbers and jumps with line numbers', () => {
   assert.match(d.warnings[1].message, /jumps from 2 to 5/)
 })
 
+test('falls back to paragraphs when a document has no headings', () => {
+  const d = segment('First paragraph about fees.\n\nSecond paragraph about term.\n\nThird paragraph about law.')
+  assert.equal(d.clauses.length, 3)
+  assert.match(d.warnings[0].message, /paragraph by paragraph/)
+})
+
 test('splitTitle only takes short title-cased lead-ins', () => {
   assert.deepEqual(splitTitle('Limitation of Liability. Except as stated.'), ['Limitation of Liability', 'Except as stated.'])
   assert.deepEqual(splitTitle('The Customer shall pay. Then more.'), ['', 'The Customer shall pay. Then more.'])

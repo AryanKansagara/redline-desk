@@ -100,6 +100,12 @@ export function segment(text: string): Doc {
     cur!.parts.push(line)
   })
   flush()
+  // No usable headings: fall back to one clause per paragraph so alignment still works.
+  const paras = text.split(/\n\s*\n/).map(p => p.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  if (clauses.filter(c => c.num || c.title).length < 2 && paras.length >= 3) {
+    warnings.push({ line: 1, message: 'No numbered or ALL-CAPS headings found; comparing paragraph by paragraph.' })
+    return { clauses: paras.map((p, i) => { const [title, body] = splitTitle(p); return { id: `c${i}`, num: null, title, body, level: 1, line: 0 } }), warnings }
+  }
   return { clauses, warnings }
 }
 
