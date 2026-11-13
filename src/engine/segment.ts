@@ -20,6 +20,8 @@ export interface Doc {
 const RE_ART = /^(?:ARTICLE|Article|SECTION|Section|CLAUSE|Clause)\s+(\d{1,2}(?:\.\d{1,3})*|[IVXLC]{1,6})\b[.:\-–—]?\s*(.*)$/
 const RE_NUM = /^(\d{1,2}(?:\.\d{1,3})*)(\.?)\s+(\S.*)$/
 const RE_SUB = /^\(([a-z]{1,2}|[ivx]{1,5}|\d{1,2})\)\s+(\S.*)$/
+const REF_TAIL = /\b(?:Sections?|Clauses?|Articles?|Paragraphs?|Schedules?|Exhibits?|§§?)$/
+const RE_LETTER = /^([a-z]|[ivx]{2,5})[.)]\s+(\S.*)$/
 const RE_CAPS = /^[A-Z][A-Z0-9 ,&'’()\-/]{2,79}$/
 const MINOR = new Set(['of', 'and', 'the', 'to', 'for', 'in', 'on', 'or', 'a', 'an', 'by', 'with', 'upon'])
 
@@ -65,10 +67,17 @@ export function segment(text: string): Doc {
     cur = { num, head, parts: [], level, line }
   }
 
+  let prevLine = ''
+  let lastText = ''
   lines.forEach((rawLine, i) => {
     const line = rawLine.trim()
     const ln = i + 1
+    const before = prevLine
+    prevLine = line
     if (!line) { cur?.parts.push(''); return }
+    // "...the provisions of this Section" / "3.4 will apply." is a wrapped cross-reference, not a new clause.
+    if (cur && REF_TAIL.test(lastText) && /^\d/.test(line)) { cur.parts.push(line); lastText = line; return }
+    lastText = line
     let m: RegExpMatchArray | null
     if ((m = line.match(RE_ART))) {
       start(m[1], m[2], 1, ln)
@@ -83,7 +92,9 @@ export function segment(text: string): Doc {
       lastNum = num; lastLetter = null
       return
     }
-    if ((m = line.match(RE_SUB)) && lastNum) {
+    // "a. Representatives." / "b) ..." lettered subclauses, only at the start of a sentence so a wrapped line is never split.
+    const lettered = !RE_SUB.test(line) && lastNum && /(^|[.:;])\s*$/.test(before) ? line.match(RE_LETTER) : null
+    if (((m = line.match(RE_SUB)) || (m = lettered)) && lastNum) {
       const label = m[1]
       const nestedRoman = isRoman(label) && lastLetter !== null && !(label === 'i' && lastLetter === 'h') && !(label === 'v' && lastLetter === 'u') && !(label === 'x' && lastLetter === 'w')
       let num: string

@@ -67,9 +67,15 @@ export async function docxToText(buf: ArrayBuffer): Promise<string> {
   const { value: html } = await mammoth.convertToHtml({ arrayBuffer: buf })
   const root = new DOMParser().parseFromString(html, 'text/html').body
   const lines: string[] = []
+  // Paragraph texts of an element; line breaks become spaces so "Cover Page<br>for" does not run together.
+  const paras = (el: Element): string[] => {
+    el.querySelectorAll('br').forEach(b => b.replaceWith(' '))
+    const ps = el.tagName === 'P' ? [el] : Array.from(el.querySelectorAll('p'))
+    return (ps.length ? ps : [el]).map(p => (p.textContent ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean)
+  }
   const numbered = /^\s*(\(?[a-z0-9ivx]{1,3}[.)]|\d+(\.\d+)*\.?|article|section)\s/i
-  const walkList = (ol: Element, prefix: string, depth: number) => {
-    let n = 0
+  const walkList = (ol: Element, prefix: string, depth: number, start = 0) => {
+    let n = start
     for (const li of Array.from(ol.children)) {
       if (li.tagName !== 'LI') continue
       n++
@@ -78,11 +84,20 @@ export async function docxToText(buf: ArrayBuffer): Promise<string> {
       if (own) lines.push('', ol.tagName === 'OL' && !numbered.test(own) ? `${label} ${own}` : own)
       for (const sub of Array.from(li.children)) if (sub.tagName === 'OL' || sub.tagName === 'UL') walkList(sub, depth === 0 ? `${n}.` : prefix, depth + 1)
     }
+    return n
   }
+  // Word keeps counting a list across an interrupting table; a paragraph or heading in between starts a new list.
+  let top = 0
   for (const el of Array.from(root.children)) {
-    if (el.tagName === 'OL' || el.tagName === 'UL') walkList(el, '', 0)
-    else if (el.tagName === 'TABLE') for (const tr of Array.from(el.querySelectorAll('tr'))) lines.push(Array.from(tr.children).map(td => td.textContent?.trim()).join(' | '))
-    else { const t = el.textContent?.trim(); if (t) lines.push('', t) }
+    if (el.tagName === 'OL') top = walkList(el, '', 0, top)
+    else if (el.tagName === 'UL') walkList(el, '', 0)
+    else if (el.tagName === 'TABLE') for (const tr of Array.from(el.querySelectorAll('tr'))) {
+      const cells = Array.from(tr.children).map(paras)
+      // A one-cell row is page layout (cover pages, boxed clauses): keep its paragraphs as paragraphs.
+      if (cells.length === 1) for (const t of cells[0]) lines.push('', t)
+      else if (cells.some(c => c.length)) lines.push('', cells.map(c => c.join(' ')).join(' | '))
+    }
+    else { const t = paras(el).join(' '); if (t) { lines.push('', t); top = 0 } }
   }
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
@@ -94,20 +109,23 @@ export async function pdfToText(buf: ArrayBuffer): Promise<string> {
   pdfjs.GlobalWorkerOptions.workerSrc = worker
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
   if (pdf.numPages > 200) throw new Error('PDFs over 200 pages are not supported in the browser.')
-  type Line = { y: number; x: number; text: string; h: number; bold: boolean; page: number }
+  type Line = { y: number; x: number; end: number; text: string; h: number; bold: boolean; page: number }
   const all: Line[] = []
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p)
     const content = await page.getTextContent()
     const styles = content.styles as Record<string, { fontFamily?: string }>
     const rows = new Map<number, Line>()
-    for (const it of content.items as { str: string; transform: number[]; height: number; fontName: string }[]) {
+    for (const it of content.items as { str: string; transform: number[]; width: number; height: number; fontName: string }[]) {
       if (!it.str.trim()) continue
+      // Rotated text (margin stamps, watermarks) is not part of the contract body.
+      if (Math.abs(it.transform[1]) > 0.01 || Math.abs(it.transform[2]) > 0.01) continue
       const y = Math.round(it.transform[5] / 2) * 2
       const bold = /bold|black|semibold/i.test(it.fontName + ' ' + (styles[it.fontName]?.fontFamily ?? ''))
       const row = rows.get(y)
-      if (row) { row.text += (row.text.endsWith(' ') || it.str.startsWith(' ') ? '' : ' ') + it.str; row.h = Math.max(row.h, it.height); row.bold &&= bold }
-      else rows.set(y, { y, x: it.transform[4], text: it.str, h: it.height, bold, page: p })
+      // Only add a space where the glyphs are visibly apart; pdf.js splits runs at font changes mid-word ("(“NDA”)").
+      if (row) { row.text += (row.text.endsWith(' ') || it.str.startsWith(' ') || it.transform[4] - row.end < it.height * 0.12 ? '' : ' ') + it.str; row.end = it.transform[4] + it.width; row.h = Math.max(row.h, it.height); row.bold &&= bold }
+      else rows.set(y, { y, x: it.transform[4], end: it.transform[4] + it.width, text: it.str, h: it.height, bold, page: p })
     }
     all.push(...[...rows.values()].sort((a, b) => b.y - a.y))
   }
@@ -120,7 +138,9 @@ export async function pdfToText(buf: ArrayBuffer): Promise<string> {
     const prev = lines[i - 1]
     const gap = prev && prev.page === l.page ? prev.y - l.y : body * 2
     const heading = (l.h > body * 1.15 || l.bold) && l.text.length < 90
-    if (heading || gap > body * 1.9 || /^(\d+(\.\d+)*\.?|\([a-z0-9]+\)|ARTICLE|Section)\s/.test(l.text.trim())) out.push('')
+    const wrappedRef = prev && /\b(?:Sections?|Clauses?|Articles?|§)$/.test(prev.text.trim()) && /^\d/.test(l.text.trim())
+    if (wrappedRef) { out[out.length - 1] += ' ' + l.text.trim(); return }
+    if (heading || gap > body * 1.9 || /^(\d+(\.\d+)*\.?|\([a-z0-9]+\)|[a-z][.)]|ARTICLE|Section)\s/.test(l.text.trim())) out.push('')
     out.push(l.text.trim())
     if (heading) out.push('')
   })
