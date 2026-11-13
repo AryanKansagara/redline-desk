@@ -54,7 +54,7 @@ export function checkRefs(doc: Clause[], prev?: Clause[], pairs?: Pair[]): XRef[
     const hitIsNew = hit && pairs?.some(p => p.b === doc.indexOf(hit) && p.a === null)
     // The reference names its target's title: that settles whether it lands in the right place.
     if (r.title && hit?.title && hit.num === r.target) {
-      if (!sameTitle(r.title, hit.title)) { status = 'stale'; detail = `${r.raw} is cited as “${r.title}” but that number is now ${hit.title}.` }
+      if (!sameTitle(r.title, hit.title)) { status = 'stale'; detail = `${r.raw} is cited as “${r.title}”, but § ${hit.num} is ${hit.title}.` }
       out.push({ ...r, status, detail })
       continue
     }

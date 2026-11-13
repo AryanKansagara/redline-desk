@@ -21,7 +21,7 @@ export default function Privacy() {
       <h2>No tracking</h2>
       <p>No analytics, ads or third-party scripts. The only third-party requests are Google Fonts and, when you sign in, the sync service.</p>
       <h2>Not legal advice</h2>
-      <p>Redline Desk is a drafting aid. The sample contracts are synthetic, written for this app with fictional parties.</p>
+      <p>Redline Desk is a drafting aid. Two sample contracts are synthetic, written for this app with fictional parties. The third is the Common Paper Cloud Service Agreement (versions 2.0 and 3.0), used under CC BY 4.0.</p>
       <p><Link href="/docs">Formats and limits</Link></p>
     </section>
   )

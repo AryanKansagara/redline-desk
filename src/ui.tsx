@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { cloudConfigured, deleteAccount, deleteCloudData, exportAll, signIn, signOut, signUp, syncNow, useSync, type SyncStatus } from './sync.ts'
+import { SAMPLES } from './engine/samples.ts'
 
 // ---------- Navigation ----------
 
@@ -312,4 +313,9 @@ export function Empty({ title, children, icon }: { title: string; children?: Rea
   return <div className="empty">{icon ?? <div className="empty-icon" aria-hidden="true" />}<h3>{title}</h3>{children}</div>
 }
 
-export const SyntheticBadge = () => <span className="badge synthetic" title="Written for this app; fictional parties">Synthetic</span>
+export const SyntheticBadge = ({ sampleId }: { sampleId?: string }) => {
+  const src = SAMPLES.find(s => s.id === sampleId)?.source
+  return src
+    ? <a className="badge synthetic" href={src.url} target="_blank" rel="noreferrer" title={`${src.name}, ${src.licence}`}>Public text · {src.licence}</a>
+    : <span className="badge synthetic" title="Written for this app; fictional parties">Synthetic</span>
+}

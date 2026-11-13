@@ -93,7 +93,8 @@ export function termReport(clauses: Clause[]): { defs: Definition[]; findings: T
     }
   }
   // Standard-form agreements leave some terms to a cover page or order form and say so.
-  const ext = clauses.map(c => c.body.match(/\b(?:meanings?|defined)\s+(?:given\s+|set (?:out|forth)\s+)?(?:on|in)\s+the\s+(Cover Page|Order Form|Key Terms|Schedule|Statement of Work)/i)?.[1]).find(Boolean)
+  const ext = clauses.map(c => c.body.match(/\b(?:meanings?|defined)\s+(?:given\s+|set (?:out|forth)\s+)?(?:on|in)\s+the\s+(Cover Page|Order Form|Key Terms|Schedule|Statement of Work)/i)?.[1]
+    ?? (/\bhighlighted and capitali[sz]ed\b/i.test(c.body) ? 'Cover Page or Order Form' : undefined)).find(Boolean)
   for (const [term, ids] of cand) findings.push({ kind: 'undefined', term, detail: ext ? `“${term}” is used ${ids.length}× like a defined term and is not defined in this text; the agreement says such terms are defined on the ${ext}.` : `“${term}” is used ${ids.length}× like a defined term but is never defined.`, clauseIds: [...new Set(ids)], count: ids.length, ...(ext ? { external: ext } : {}) })
   return { defs, findings, uses }
 }

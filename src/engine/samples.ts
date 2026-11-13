@@ -1,6 +1,7 @@
-// Synthetic contract sets written for this app. Fictional parties; not legal advice.
+// Sample contract sets: two synthetic ones written for this app (fictional parties) and one real public standard.
+import { CSA_V2, CSA_V3 } from './publicSamples.ts'
 
-export interface SampleSet { id: string; name: string; blurb: string; playbookId: string; versions: { label: string; fileName: string; text: string }[]; conceded?: string[] }
+export interface SampleSet { id: string; name: string; blurb: string; playbookId: string; versions: { label: string; fileName: string; text: string }[]; conceded?: string[]; counterparty: string; source?: { name: string; url: string; licence: string } }
 
 const BANNER = 'SYNTHETIC SAMPLE: fictional parties, written for Redline Desk. Not legal advice.'
 
@@ -111,7 +112,7 @@ ${o.exclusions ? `8.2 Exclusions. The cap in Section 8.1 does not apply to a par
 
 export const SAMPLES: SampleSet[] = [
   {
-    id: 'nda', name: 'Mutual NDA, counterparty redraft', playbookId: 'nda-mutual',
+    id: 'nda', name: 'Mutual NDA, counterparty redraft', playbookId: 'nda-mutual', counterparty: 'Bluefin Robotics (synthetic)',
     blurb: 'Bluefin sent back v2: one-way, five-year survival, governing law moved to the end and switched to Texas.',
     versions: [
       { label: 'v1 Our draft', fileName: 'Northwind-Bluefin NDA v1.txt', text: NDA_V1 },
@@ -119,7 +120,7 @@ export const SAMPLES: SampleSet[] = [
     ],
   },
   {
-    id: 'msa', name: 'SaaS MSA, three rounds', playbookId: 'msa-customer',
+    id: 'msa', name: 'SaaS MSA, three rounds', playbookId: 'msa-customer', counterparty: 'Stratus Ledger (synthetic)',
     blurb: 'Provider cut the liability cap from 12 months of fees to 3, deleted the carve-outs and broke a cross-reference. Round 3 claws some back.',
     versions: [
       { label: 'v1 Customer paper', fileName: 'Stratus-Kestrel MSA v1.txt', text: msa({ round: 'Round 1.', cap: 'the Fees paid or payable by Customer in the twelve (12) months', payDays: 'forty-five (45)', noticeDays: 'thirty (30)', convenience: true, exclusions: true }) },
@@ -127,5 +128,14 @@ export const SAMPLES: SampleSet[] = [
       { label: 'v3 Customer response', fileName: 'Stratus-Kestrel MSA v3.txt', text: msa({ round: 'Round 3.', cap: 'the Fees paid or payable by Customer in the six (6) months', payDays: 'thirty (30)', noticeDays: 'sixty (60)', convenience: false, exclusions: true }) },
     ],
     conceded: ['msa-cap'],
+  },
+  {
+    id: 'csa', name: 'Real: Common Paper cloud agreement v2 → v3', playbookId: 'msa-customer', counterparty: 'Common Paper (public standard)',
+    blurb: 'The published Cloud Service Agreement standard terms, 2.0 against 3.0. Machine-learning clause dropped, liability caps rewritten, and a v2.0 cross-reference to the wrong section.',
+    source: { name: 'Common Paper Cloud Service Agreement', url: 'https://github.com/CommonPaper/CSA', licence: 'CC BY 4.0' },
+    versions: [
+      { label: 'v2.0 Common Paper', fileName: 'Common Paper CSA 2.0.md', text: CSA_V2 },
+      { label: 'v3.0 Common Paper', fileName: 'Common Paper CSA 3.0.md', text: CSA_V3 },
+    ],
   },
 ]

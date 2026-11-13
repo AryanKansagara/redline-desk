@@ -32,7 +32,7 @@ export default function Print({ id, kind }: { id: string; kind: 'memo' | 'redlin
           <div className="eyebrow">{kind === 'memo' ? 'Issues memo' : 'Redline'} · Privileged &amp; confidential draft</div>
           <h1>{p.name}</h1>
           <p>{lb} compared against {la} · {p.counterparty ?? 'Counterparty not set'} · Playbook: {p.playbook.name}</p>
-          <p className="muted small">Prepared {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}{d.reviewer ? ` by ${d.reviewer}` : ''}{d.firm ? `, ${d.firm}` : ''}. Automated first-pass review; not legal advice.{p.sampleId ? ' Synthetic sample contract.' : ''}</p>
+          <p className="muted small">Prepared {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}{d.reviewer ? ` by ${d.reviewer}` : ''}{d.firm ? `, ${d.firm}` : ''}. Automated first-pass review; not legal advice.{p.sampleId ? (p.sampleId === 'csa' ? ' Common Paper CSA, CC BY 4.0.' : ' Synthetic sample contract.') : ''}</p>
         </header>
         {kind === 'memo' ? (
           <>

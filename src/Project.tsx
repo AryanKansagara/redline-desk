@@ -49,7 +49,7 @@ export default function ProjectView({ id, tab }: { id: string; tab: string }) {
       <div className="page-head">
         <div>
           <div className="eyebrow"><Link href="/app">Matters</Link> / {p.playbook.name}</div>
-          <h1>{p.name} {p.sampleId && <SyntheticBadge />}</h1>
+          <h1>{p.name} {p.sampleId && <SyntheticBadge sampleId={p.sampleId} />}</h1>
           <p className="muted">{p.counterparty ?? 'Counterparty not set'} · {vs.length} version{vs.length === 1 ? '' : 's'}</p>
         </div>
         <div className="row gap wrap">

@@ -33,7 +33,7 @@ export function markdownToText(md: string): string {
   const stack: { indent: number; n: string }[] = []
   const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii']
   const inline = (s: string) => s
-    .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')
+    .replace(/<br\s*\/?>/gi, ' ').replace(/<((?:https?:|mailto:)[^>\s]+)>/g, '$1').replace(/<[^>]+>/g, '')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\*\*|__/g, '').replace(/(^|[\s(“"])[*_]([^*_\n]+)[*_](?=[\s.,;:)”"]|$)/g, '$1$2')
     .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')

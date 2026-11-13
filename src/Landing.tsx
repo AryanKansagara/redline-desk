@@ -159,8 +159,8 @@ export function Landing() {
       </section>
 
       <section className="section cta">
-        <h2 className="section-title">Two synthetic contract sets are ready to open</h2>
-        <p className="muted">A mutual NDA the counterparty made one-way, and a SaaS MSA where the liability cap shrank and a cross-reference broke. Not legal advice.</p>
+        <h2 className="section-title">Three contract sets are ready to open</h2>
+        <p className="muted">A mutual NDA the counterparty made one-way and a SaaS MSA where the liability cap shrank (both synthetic), plus two published versions of the Common Paper cloud agreement (CC BY 4.0). Not legal advice.</p>
         <div className="row gap center-x wrap">
           {SAMPLES.map(s => <Link key={s.id} href={`/app?sample=${s.id}`} className="btn ghost lg">{s.name}</Link>)}
         </div>

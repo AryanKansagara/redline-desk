@@ -49,7 +49,7 @@ export default function Workspace() {
           <article className="onboard-card feature">
             <div className="eyebrow">Two minutes</div>
             <h2>Try the sample</h2>
-            <p>Two synthetic contract sets, written from scratch, with the problems you meet in real negotiations. Every view is live.</p>
+            <p>Two synthetic contract sets with the problems you meet in real negotiations, and one real published agreement. Every view is live.</p>
             <div className="stack-sm">
               {SAMPLES.map(s => (
                 <button key={s.id} type="button" className="sample-btn" onClick={() => void openSample(s.id)}>
@@ -112,7 +112,7 @@ function ProjectCard({ p }: { p: Project }) {
             <input name="n" defaultValue={p.name} autoFocus aria-label="Matter name" onBlur={e => e.currentTarget.form?.requestSubmit()} />
           </form>
         ) : <h3><Link href={`/app/p/${p.id}`}>{p.name}</Link></h3>}
-        {p.sampleId && <SyntheticBadge />}
+        {p.sampleId && <SyntheticBadge sampleId={p.sampleId} />}
       </div>
       <p className="muted small">{p.counterparty ?? 'No counterparty set'} · {p.playbook.name}</p>
       <dl className="mini-stats">

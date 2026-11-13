@@ -23,7 +23,7 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
   const playbook = clonePlaybook(playbookById(s.playbookId)!)
   const now = Date.now()
   const versions = s.versions.map((v, i) => ({ ...buildVersion(`${sampleId}-v${i + 1}`, v.label, v.fileName, 'text', v.text, playbook, s.versions[i - 1]?.text), at: now - (s.versions.length - i) * 86400000 * 3 }))
-  return saveProject({ id: uuid(), name: s.name, counterparty: sampleId === 'nda' ? 'Bluefin Robotics (synthetic)' : 'Stratus Ledger (synthetic)', createdAt: now, updatedAt: now, playbook, versions, conceded: s.conceded ?? [], notes: s.conceded ? { 'msa-cap': 'Accepted 6 months in exchange for restoring the data breach carve-out (round 3).' } : {}, sampleId })
+  return saveProject({ id: uuid(), name: s.name, counterparty: s.counterparty, createdAt: now, updatedAt: now, playbook, versions, conceded: s.conceded ?? [], notes: s.conceded ? { 'msa-cap': 'Accepted 6 months in exchange for restoring the data breach carve-out (round 3).' } : {}, sampleId })
 }
 
 export async function createBlankProject(name: string, playbookId?: string): Promise<Project> {

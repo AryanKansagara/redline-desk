@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { segment, clauseLabel } from './engine/segment.ts'
 import { definitions } from './engine/terms.ts'
-import { readFile } from './importers.ts'
+import { looksLikeMarkdown, markdownToText, readFile } from './importers.ts'
 import type { Format } from './store.ts'
 import { toast } from './ui.tsx'
 
@@ -30,7 +30,7 @@ export function ImportVersion({ nextLabel, onDone, onCancel }: { nextLabel: stri
     <div className="stack">
       <label className={`drop${drag ? ' over' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) void take(f) }}>
         <input type="file" accept=".docx,.pdf,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={e => { const f = e.target.files?.[0]; if (f) void take(f) }} />
-        <strong>{busy ? 'Reading the document in your browser…' : 'Drop a DOCX, PDF or text file'}</strong>
+        <strong>{busy ? 'Reading the document in your browser…' : 'Drop a DOCX, PDF, Markdown or text file'}</strong>
         <span className="muted small">or click to choose. Up to 15 MB. Nothing is uploaded.</span>
       </label>
       {err && <p className="error" role="alert">{err}</p>}
@@ -38,7 +38,7 @@ export function ImportVersion({ nextLabel, onDone, onCancel }: { nextLabel: stri
       <label className="field"><span className="sr-only">Contract text</span><textarea rows={8} value={paste} onChange={e => setPaste(e.target.value)} placeholder={'1. Definitions\n1.1 "Services" means…'} /></label>
       <div className="row end gap">
         <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button type="button" className="btn primary" disabled={!paste.trim()} onClick={() => setParsed({ label: nextLabel, fileName: 'Pasted text', format: 'text', text: paste })}>Check pasted text</button>
+        <button type="button" className="btn primary" disabled={!paste.trim()} onClick={() => setParsed({ label: nextLabel, fileName: 'Pasted text', format: 'text', text: looksLikeMarkdown(paste) ? markdownToText(paste) : paste })}>Check pasted text</button>
       </div>
     </div>
   )
