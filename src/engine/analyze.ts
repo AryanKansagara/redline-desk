@@ -40,7 +40,7 @@ export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[]
   }
   const tr = termReport(doc.clauses)
   for (const f of tr.findings) {
-    const sev: Severity = f.kind === 'undefined' || f.kind === 'duplicate' ? 'medium' : 'low'
+    const sev: Severity = (f.kind === 'undefined' && !f.external) || f.kind === 'duplicate' ? 'medium' : 'low'
     const issue = { unused: 'Defined term never used', undefined: 'Term used but not defined', inconsistent: 'Inconsistent capitalisation', duplicate: 'Term defined twice' }[f.kind]
     const fallback = { unused: `Delete the definition of “${f.term}”, or use it.`, undefined: `Add a definition for “${f.term}” or use the existing defined term.`, inconsistent: `Use “${f.term}” consistently.`, duplicate: `Keep one definition of “${f.term}”.` }[f.kind]
     out.push({ key: `term:${f.kind}:${f.term}`, source: 'terms', clauseId: f.clauseIds[0] ?? null, clause: labelOf(doc.clauses, f.clauseIds[0] ?? null), issue, detail: f.detail, severity: sev, fallback })

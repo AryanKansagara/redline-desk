@@ -2,7 +2,7 @@
 import type { Clause } from './segment.ts'
 
 export interface Definition { term: string; definition: string; clauseId: string }
-export interface TermFinding { kind: 'unused' | 'undefined' | 'inconsistent' | 'duplicate'; term: string; detail: string; clauseIds: string[]; count: number }
+export interface TermFinding { kind: 'unused' | 'undefined' | 'inconsistent' | 'duplicate'; term: string; detail: string; clauseIds: string[]; count: number; external?: string }
 export interface TermChange { term: string; kind: 'added' | 'removed' | 'changed'; before?: string; after?: string }
 
 const Q_OPEN = '["“”]'
@@ -65,6 +65,8 @@ export function termReport(clauses: Clause[]): { defs: Definition[]; findings: T
         const multiWord = term.includes(' ')
         // Lower-case "services" next to a defined "Services" is ordinary English; only flag mixed case, or any variant of a multi-word term.
         if (!multiWord && v === v.toLowerCase()) continue
+        // ALL-CAPS is how disclaimers are made conspicuous, not a different term.
+        if (v === v.toUpperCase()) continue
         // Sentence-initial capital on a lower-case word is not a variant either.
         variants.set(v, [...(variants.get(v) ?? []), c.id])
       }
@@ -78,16 +80,21 @@ export function termReport(clauses: Clause[]): { defs: Definition[]; findings: T
   const cand = new Map<string, string[]>()
   const titles = new Set(clauses.map(c => c.title.toLowerCase()))
   for (const c of clauses) {
-    for (const m of c.body.matchAll(/\b(?:the|any|each|such|all|that|either|its|their|other)\s+((?:[A-Z][a-z]+)(?:\s+[A-Z][a-z]+){0,3})\b/g)) {
+    for (const m of c.body.matchAll(/\b(?:the|any|each|such|all|that|either|its|their|other)\s+((?:[A-Z][a-z]+(?:-[A-Z][a-z]+)*)(?:\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)*){0,3})(?![\w-])/g)) {
       const phrase = m[1]
       if (STOP_FIRST.has(phrase.split(' ')[0]) || titles.has(phrase.toLowerCase())) continue
+      // Names of statutes and treaties ("the Health Insurance Portability and Accountability Act", "the International Sale of Goods").
+      const after = c.body.slice(m.index! + m[0].length, m.index! + m[0].length + 60)
+      if (/^(?:\s+(?:and|of|for|on|[A-Z][a-z]+))*\s+(?:Act|Convention|Code|Regulation|Directive|Goods)\b/.test(after) || /Convention[^.]{0,40}$/.test(c.body.slice(Math.max(0, m.index! - 60), m.index!))) continue
       if (byTerm.has(phrase) || definedStems.has(stem(phrase))) continue
       // Inside a quoted definition, or a longer defined term that starts with this phrase.
       if ([...byTerm.keys()].some(t => t.startsWith(phrase + ' '))) continue
       cand.set(phrase, [...(cand.get(phrase) ?? []), c.id])
     }
   }
-  for (const [term, ids] of cand) findings.push({ kind: 'undefined', term, detail: `“${term}” is used ${ids.length}× like a defined term but is never defined.`, clauseIds: [...new Set(ids)], count: ids.length })
+  // Standard-form agreements leave some terms to a cover page or order form and say so.
+  const ext = clauses.map(c => c.body.match(/\b(?:meanings?|defined)\s+(?:given\s+|set (?:out|forth)\s+)?(?:on|in)\s+the\s+(Cover Page|Order Form|Key Terms|Schedule|Statement of Work)/i)?.[1]).find(Boolean)
+  for (const [term, ids] of cand) findings.push({ kind: 'undefined', term, detail: ext ? `“${term}” is used ${ids.length}× like a defined term and is not defined in this text; the agreement says such terms are defined on the ${ext}.` : `“${term}” is used ${ids.length}× like a defined term but is never defined.`, clauseIds: [...new Set(ids)], count: ids.length, ...(ext ? { external: ext } : {}) })
   return { defs, findings, uses }
 }
 

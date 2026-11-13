@@ -56,6 +56,10 @@ export function governingLaw(text: string): string | null {
   return m ? m[1].trim() : null
 }
 
+/** A capitalised placeholder such as "the General Cap Amount" whose value lives on a cover page or order form. */
+const placeholder = (text: string, key: string) => text.match(new RegExp(`\\b[Tt]he ((?:[A-Z][A-Za-z-]+ ){0,4}(?:${key}))\\b`))?.[1] ?? null
+const elsewhere = (term: string) => `set by “${term}”, which is filled in outside this text (cover page or order form)`
+
 function fail(r: Rule, c: Clause | null, message: string): Finding {
   return { ruleId: r.id, rule: r.name, status: 'fail', severity: r.severity, clauseId: c?.id ?? null, clause: c ? clauseLabel(c) : 'Whole agreement', message, fallback: r.fallback }
 }
@@ -79,7 +83,9 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
     case 'liabilityCap': {
       const re = /limitation of liability|liability cap|aggregate liability|total liability|cumulative liability/i
       const heads = clauses.filter(c => re.test(c.title) && c.num)
-      const cs = clauses.filter(c => re.test(c.title) || re.test(c.body) || heads.some(h => c.num?.startsWith(h.num + '.')))
+      const underHead = (c: Clause) => re.test(c.title) || heads.some(h => c.num?.startsWith(h.num + '.') || c.num?.startsWith(h.num + '('))
+      // Clauses in the liability section first; a body that merely cites "Limitation of Liability" comes last.
+      const cs = [...clauses.filter(underHead), ...clauses.filter(c => !underHead(c) && re.test(c.body))]
       for (const c of cs) {
         const cap = parseCap(c.body)
         if (!cap) continue
@@ -87,6 +93,8 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
         if (cap.amount !== undefined && r.minAmount && cap.amount < r.minAmount) return [fail(r, c, `Cap is ${cap.raw}; playbook minimum is $${r.minAmount.toLocaleString('en-US')}.`)]
         return [pass(r, c, cap.months !== undefined ? `Cap is ${cap.months} months of fees.` : `Cap is ${cap.raw}.`)]
       }
+      const ph = cs.map(c => [c, placeholder(c.body, 'Cap Amount|Cap|Liability Amount|Liability Cap')] as const).find(x => x[1])
+      if (ph) return [fail(r, ph[0], `Cap is ${elsewhere(ph[1]!)}. Check it is at least ${r.minMonths} months of fees.`)]
       return [fail(r, cs[0] ?? null, cs.length ? 'Liability clause found but no cap amount could be read.' : 'No limitation of liability clause found.')]
     }
     case 'duration': {
@@ -107,10 +115,14 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
       for (const c of clauses) {
         const law = governingLaw(c.body)
         if (!law) continue
+        if (/^(?:Governing Law|Applicable Law|Jurisdiction)\b/.test(law)) return [fail(r, c, `Governing law is ${elsewhere(law)}. Confirm it is one of: ${r.allowed.join(', ')}.`)]
         const ok = r.allowed.some(a => law.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(law.toLowerCase()))
         return [ok ? pass(r, c, `${law} law.`) : fail(r, c, `${law} law is not in the allowed list (${r.allowed.join(', ')}).`)]
       }
-      return [fail(r, null, 'No governing law clause found.')]
+      const gl = titleOrBody(clauses, /governing law|governed by/i)[0]
+      const ph = gl && placeholder(gl.body, 'Law')
+      if (ph) return [fail(r, gl, `Governing law is ${elsewhere(ph)}. Confirm it is one of: ${r.allowed.join(', ')}.`)]
+      return [fail(r, gl ?? null, gl ? 'Governing law clause found but no jurisdiction could be read.' : 'No governing law clause found.')]
     }
     case 'paymentDays': {
       for (const c of titleOrBody(clauses, /payment|invoice|fees/i)) {
@@ -147,6 +159,8 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
       if (!c) return [pass(r, null, 'No automatic renewal.')]
       const m = c.body.match(/(?:at least|no less than|not less than|no later than|minimum of)\s+(\w+(?:-\w+)?)\s*(?:\((\d+)\)\s*)?(?:calendar |business )?days/i)
       const n = m ? (m[2] ? Number(m[2]) : parseNumber(m[1])) : null
+      const ph = n === null && placeholder(c.body, 'Notice Date|Notice Period|Renewal Date')
+      if (ph) return [fail(r, c, `Renews automatically; the opt-out deadline is ${elsewhere(ph)}. Check it is no more than ${r.maxNoticeDays} days before renewal.`)]
       if (n === null) return [fail(r, c, 'Renews automatically with no notice window to opt out.')]
       return [n > r.maxNoticeDays ? fail(r, c, `Renews automatically unless you give ${n} days' notice; playbook maximum is ${r.maxNoticeDays}.`) : pass(r, c, `${n}-day notice window.`)]
     }

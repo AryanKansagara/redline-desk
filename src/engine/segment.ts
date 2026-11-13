@@ -31,7 +31,7 @@ export function splitTitle(text: string): [string, string] {
   const m = t.match(/^([A-Z][^.;:]{1,70}?)[.:]\s+([\s\S]*)$/) ?? t.match(/^([A-Z][^.;:]{1,70}?)\.?$/)
   if (m) {
     const words = m[1].split(/\s+/)
-    const capped = words.filter(w => /^[A-Z0-9“"(]/.test(w) || MINOR.has(w.toLowerCase()))
+    const capped = words.filter(w => /^[A-Z0-9“"(&]/.test(w) || MINOR.has(w.toLowerCase()))
     const ok = words.length <= 9 && capped.length === words.length && !/\b(shall|will|may|must|is|are)\b/.test(m[1])
     if (ok) return [m[1].trim(), (m[2] ?? '').trim()]
   }

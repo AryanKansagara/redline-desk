@@ -16,9 +16,49 @@ export async function readFile(file: File): Promise<{ format: Format; text: stri
   if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is ${(file.size / 1048576).toFixed(1)} MB; the limit is 15 MB.`)
   const format = await detectFormat(file)
   if (!format) throw new Error(`${file.name} is not a DOCX, PDF or text file. Old .doc files: save as .docx first.`)
-  if (format === 'text') return { format, text: await file.text() }
+  if (format === 'text') { const t = await file.text(); return { format, text: /\.md$/i.test(file.name) || looksLikeMarkdown(t) ? markdownToText(t) : t } }
   const buf = await file.arrayBuffer()
   return { format, text: format === 'docx' ? await docxToText(buf) : await pdfToText(buf) }
+}
+
+/** True when pasted or loaded text is raw Markdown (headings, bold titles, inline HTML, nested list indents). */
+export const looksLikeMarkdown = (t: string) => (t.match(/^#{1,6}\s|\*\*[^*\n]+\*\*|<span\b|^ {2,}(\d+|[a-z])\.\s/gm)?.length ?? 0) >= 3
+
+/**
+ * Markdown -> plain contract text. Strips emphasis, links and inline HTML, and rebuilds numbering for
+ * indented ordered lists the way open-source contract repos write them: "11." then an indented "1." means 11.1,
+ * an indented "a." means (a), and a further level means (i).
+ */
+export function markdownToText(md: string): string {
+  const stack: { indent: number; n: string }[] = []
+  const roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii']
+  const inline = (s: string) => s
+    .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*|__/g, '').replace(/(^|[\s(“"])[*_]([^*_\n]+)[*_](?=[\s.,;:)”"]|$)/g, '$1$2')
+    .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/^#{1,6}\s+/, '').replace(/\s+$/, '')
+  const out: string[] = []
+  for (const raw of md.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n')) {
+    const m = raw.match(/^( *)(\d{1,3}|[a-z]|[ivx]{1,5})\.\s+(.*)$/)
+    if (!m) {
+      if (!raw.trim()) { out.push(''); continue }
+      if (!/^ {2,}/.test(raw)) stack.length = 0
+      out.push(inline(raw.trim().replace(/^[-*+]\s+/, '').replace(/^>\s?/, '')))
+      continue
+    }
+    const indent = m[1].length
+    while (stack.length && stack.at(-1)!.indent >= indent) stack.pop()
+    const depth = stack.length
+    const pos = /^\d+$/.test(m[2]) ? +m[2] : m[2].length === 1 && depth < 3 ? m[2].charCodeAt(0) - 96 : roman.indexOf(m[2]) + 1
+    const text = inline(m[3])
+    // Text that already carries its own number ("1.1 Access", "(a) ...") keeps it.
+    const own = /^(\d+(\.\d+)+|\(?[a-z0-9]{1,4}\))\s/i.test(text)
+    const label = depth === 0 ? `${pos}.` : depth === 1 ? `${stack[0].n}.${pos}` : depth === 2 ? `(${String.fromCharCode(96 + Math.min(pos, 26))})` : `(${roman[pos - 1] ?? pos})`
+    stack.push({ indent, n: depth === 0 ? String(pos) : label })
+    out.push(own ? text : `${label} ${text}`)
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
 
 /** DOCX -> text with numbering rebuilt from list nesting (Word auto-numbering is not in the text itself). */
