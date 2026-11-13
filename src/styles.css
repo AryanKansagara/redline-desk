@@ -426,6 +426,18 @@ details summary { cursor: pointer; font-size: 14px; }
   .paper { padding: 28px 20px; }
   .mini-stats { grid-template-columns: repeat(2, 1fr); }
   .stat b { font-size: 1.6rem; }
+  /* Issues and rounds read as cards on phones instead of a five-column table. */
+  table.issues thead, table.rounds thead { display: none; }
+  table.issues, table.issues tbody, table.issues tr, table.issues td,
+  table.rounds, table.rounds tbody, table.rounds tr { display: block; width: auto; }
+  table.issues tr, table.rounds tr { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  table.issues tr:last-child, table.rounds tr:last-child { border-bottom: 0; }
+  table.issues td { padding: 4px 0; border: 0; }
+  table.issues td:first-child { width: auto; }
+  table.issues .nowrap { white-space: normal; }
+  table.rounds td { display: inline-block; padding: 4px 8px 4px 0; border: 0; vertical-align: middle; }
+  table.rounds td:first-child, table.rounds td:last-child { display: block; padding-right: 0; }
+  table.rounds .note { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

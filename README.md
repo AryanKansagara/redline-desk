@@ -10,17 +10,17 @@ The counterparty sends back a PDF, or a Word file with no tracked changes, and y
 
 ## What it does
 
-- **Import** two or more versions as DOCX (list numbering rebuilt), PDF (text layer, headings reconstructed) or pasted text. A validation report lists duplicate or skipped numbers by line.
+- **Import** two or more versions as DOCX (list numbering rebuilt, also across interrupting tables), PDF (text layer, headings reconstructed, margin stamps dropped), Markdown (nested list numbering rebuilt) or pasted text. A validation report lists duplicate or skipped numbers by line.
 - **Clause-aware compare**: segmentation (1., 1.1, (a), Article/Section, ALL-CAPS headings), similarity-based alignment that handles renumbering and moved clauses, and a Myers word diff inside each clause.
 - **Defined terms**: unused, undefined or inconsistently capitalised terms, and definitions whose wording changed.
-- **Cross-references**: references that no longer exist, or that now land on a different clause after renumbering.
+- **Cross-references**: references that no longer exist, that now land on a different clause after renumbering, or whose cited title (“Section 12 (Confidentiality)”) does not match the clause at that number.
 - **Values**: amounts, percentages, periods, dates and fee multiples shown as before → after.
 - **Playbooks**: editable rules per matter with severity and fallback language. Starters for a mutual NDA, a customer-side MSA/SaaS agreement and a freelancer agreement. Rule types: required clauses, forbidden phrases, liability cap, term and survival length, governing law, payment days, IP assignment scope, non-compete and non-solicit, auto-renewal notice, and mutuality.
 - **Actions**: issues list as CSV, a printable memo, a DOCX redline (coloured underline and strikethrough) and a printable HTML redline.
 - **Rounds**: v1 → v2 → v3 tracking of open, new, resolved and conceded issues, with notes.
 - **Workspace**: multiple matters stored locally in IndexedDB. Optional Supabase sign-in syncs playbooks, issue lists and status; contract text syncs only if you opt in per matter (1.5 MB cap).
 
-Two synthetic contract sets are included. Not legal advice.
+Two synthetic contract sets are included, plus a real one: the Common Paper Cloud Service Agreement 2.0 and 3.0 ([CommonPaper/CSA](https://github.com/CommonPaper/CSA), CC BY 4.0, converted to plain text). Importers are tested against Common Paper and Bonterms agreements in Markdown, PDF and DOCX; see /docs. Not legal advice.
 
 ## Run locally
 

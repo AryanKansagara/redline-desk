@@ -13,8 +13,9 @@ export default function Docs() {
         <thead><tr><th>Format</th><th>How to get it</th><th>What is kept</th></tr></thead>
         <tbody>
           <tr><td><b>DOCX</b></td><td>Word: File › Save As › Word Document (.docx). Google Docs: File › Download › Microsoft Word. Old .doc files: open and re-save as .docx.</td><td>Paragraph text, headings and list numbering. Word auto-numbering is rebuilt from list nesting (1., 1.1, (a)). Tracked changes are read as the current text; accept or reject them first if you want a clean base.</td></tr>
-          <tr><td><b>PDF</b></td><td>The PDF the other side sent. It must have a text layer: if you cannot select text in a viewer, run OCR first (Preview, Acrobat or <code>ocrmypdf</code>).</td><td>Text reconstructed line by line from glyph positions; larger or bold lines become headings; page numbers are dropped. Columns and footnotes may interleave.</td></tr>
-          <tr><td><b>Text</b></td><td>Paste from anywhere, or a .txt/.md file.</td><td>Exactly what you paste. Keep one clause per line or paragraph.</td></tr>
+          <tr><td><b>PDF</b></td><td>The PDF the other side sent. It must have a text layer: if you cannot select text in a viewer, run OCR first (Preview, Acrobat or <code>ocrmypdf</code>).</td><td>Text reconstructed line by line from glyph positions; larger or bold lines become headings; page numbers and rotated margin stamps are dropped; a section number wrapped onto the next line stays in its sentence. Columns and footnotes may interleave.</td></tr>
+          <tr><td><b>Markdown</b></td><td>A .md file, or Markdown pasted from a GitHub contract repo (Common Paper, Bonterms).</td><td>Bold, emphasis, links and inline HTML are stripped. Indented ordered lists are renumbered the way they render: “8.” then an indented “1.” becomes 8.1, an indented “a.” becomes (a).</td></tr>
+          <tr><td><b>Text</b></td><td>Paste from anywhere, or a .txt file.</td><td>Exactly what you paste. Keep one clause per line or paragraph.</td></tr>
         </tbody>
       </table>
       <h3>Limits</h3>
@@ -33,7 +34,7 @@ export default function Docs() {
         <li><b>Word diff.</b> Inside each pair, a Myers shortest-edit diff runs on words, and replaced phrases are grouped so the redline reads naturally.</li>
         <li><b>Values.</b> Amounts, percentages, periods (“thirty (30) days”), dates and multiples (“two times the fees”) are extracted and shown as before → after.</li>
         <li><b>Defined terms.</b> Definitions written as <code>"X" means</code>, <code>(the "X")</code> or <code>each a "X"</code> are collected. You get unused terms, terms used like defined terms but never defined, inconsistent capitalisation, and definitions whose wording changed.</li>
-        <li><b>Cross-references.</b> Every “Section 7.2”, “Sections 3 and 4(a)” or “Article IV” is checked against the version’s numbering. A reference is <em>stale</em> when the clause it pointed to was renumbered or deleted and the number now lands somewhere else.</li>
+        <li><b>Cross-references.</b> Every “Section 7.2”, “Sections 3 and 4(a)” or “Article IV” is checked against the version’s numbering. A reference is <em>stale</em> when the clause it pointed to was renumbered or deleted and the number now lands somewhere else. When a reference names its target (“Section 12 (Confidentiality)”), the name is checked against the clause that number lands on, even in a single version.</li>
       </ol>
 
       <h2 id="playbooks">Playbooks</h2>
@@ -50,6 +51,7 @@ export default function Docs() {
         <li><b>Auto-renewal</b>: flags automatic renewal with no opt-out window, or a notice window longer than your maximum.</li>
         <li><b>Mutual obligations</b>: flags an NDA that protects only one party.</li>
       </ul>
+      <p>Standard-form agreements often leave the numbers to a cover page or order form (“the General Cap Amount”, “the Governing Law”, “the Non-Renewal Notice Date”). The cap, governing-law and renewal rules then name the placeholder and ask you to check the cover page, rather than reporting the clause as missing.</p>
       <h3>Starter playbooks</h3>
       {STARTER_PLAYBOOKS.map(pb => (
         <details key={pb.id}>
@@ -69,10 +71,18 @@ export default function Docs() {
         <li>A DOCX redline with insertions double-underlined in blue and deletions struck through in red, plus a printable HTML redline.</li>
       </ul>
 
+      <h2 id="tested">Tested against real documents</h2>
+      <p>The importers and checks are tested against published, openly licensed agreements (retrieved November 2026):</p>
+      <ul>
+        <li>Common Paper Cloud Service Agreement 1.0, 2.0 and 3.0, Markdown (<a href="https://github.com/CommonPaper/CSA">github.com/CommonPaper/CSA</a>, CC BY 4.0). Versions 2.0 and 3.0 are included as a sample matter, converted to plain text with the wording unchanged. Version 2.0 § 8.4 cites “Section 12 (Confidentiality)” where Confidentiality is § 10; Redline Desk reports it.</li>
+        <li>Common Paper Mutual NDA 1.0, Markdown (<a href="https://github.com/CommonPaper/Mutual-NDA">github.com/CommonPaper/Mutual-NDA</a>, CC BY 4.0).</li>
+        <li>Bonterms Mutual NDA 1.0 as PDF and Markdown, Bonterms Cloud Terms 1.0 and Professional Services Agreement 1.2 as PDF, and the Bonterms cover page, playbook and DPA schedules as DOCX (<a href="https://github.com/Bonterms">github.com/Bonterms</a>, CC BY 4.0).</li>
+      </ul>
+
       <h2>Known limits</h2>
       <ul>
         <li>Checks are pattern-based. They catch the usual drafting moves but not every phrasing, and they do not understand intent.</li>
-        <li>Tables and images in DOCX are flattened to text; footnotes and headers are ignored.</li>
+        <li>Tables and images in DOCX are flattened to text; footnotes and headers are ignored. Very irregular Word list nesting can still produce a duplicate number, which the import report shows.</li>
         <li>Not legal advice. Read the contract.</li>
       </ul>
       <p><Link href="/app?sample=nda" className="btn primary">Try the NDA sample</Link> <Link href="/privacy" className="btn ghost">Privacy</Link></p>
