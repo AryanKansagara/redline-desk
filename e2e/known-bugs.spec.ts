@@ -148,14 +148,12 @@ test('#13 hyphenated periods are compared', async ({ page }) => {
 })
 
 test('#14 RTF is refused', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await upload(page, textFile('a.rtf', '{\\rtf1\\ansi 1. Services. Hosts.\\par\n2. Payment. Pays.\\par}', 'application/rtf'))
   await expect(dialog(page).getByRole('alert')).toContainText(/docx/i, soon)
 })
 
 test('#14 Windows-1252 quotes survive', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await upload(page, textFile('a.txt', Buffer.from('1. Defs. \x93Fees\x94 means sums due.\r\n2. Pay. Customer pays the Fees.\r\n', 'latin1')))
   await expect(dialog(page).locator('.outline li').first()).toBeVisible()

@@ -65,6 +65,22 @@ test('text: a BOM and CRLF do not change the result', async ({ page }) => {
   await expect(stat(page, 'modified')).toHaveText('0')
 })
 
+test('text: UTF-16 with a byte order mark reads the same as UTF-8; other encodings are announced', async ({ page }) => {
+  const text = '1. Defs. “Fees” means sums due in €.\n2. Pay. Customer pays the Fees.\n'
+  await newMatter(page)
+  await upload(page, textFile('u8.txt', text))
+  await expect(dialog(page).locator('.outline')).toContainText('“Fees” means sums due in €')
+  await expect(dialog(page)).not.toContainText('Windows-1252')
+  await confirmVersion(page, 1)
+  await upload(page, textFile('u16.txt', Buffer.from('\ufeff' + text, 'utf16le')))
+  await confirmVersion(page, 2)
+  await expect(stat(page, 'unchanged')).toHaveText('2')
+  await upload(page, textFile('w.txt', Buffer.from(text.replace('“', '\x93').replace('”', '\x94').replace('€', '\x80'), 'latin1')))
+  await expect(dialog(page).getByRole('alert')).toContainText('read as Windows-1252')
+  await confirmVersion(page, 3)
+  await expect(stat(page, 'unchanged')).toHaveText('2')
+})
+
 test('pasted text: duplicate and skipped numbers are reported by line', async ({ page }) => {
   await newMatter(page)
   await pasteText(page, '1. One. First clause.\n2. Two. Second clause.\n2. Two again. Third clause.\n5. Five. Fourth clause.')
@@ -87,6 +103,11 @@ test.describe('files that must be refused', () => {
     ['an empty text file', () => textFile('empty.txt', ''), /No text found in this file/],
     ['a blank text file', () => textFile('blank.txt', ' \r\n\t\n'), /No text found in this file/],
     ['an old .doc', () => textFile('old.doc', Buffer.from([0xd0, 0xcf, 0x11, 0xe0]), 'application/msword'), /old\.doc is not a DOCX, PDF or text file.*save as \.docx/],
+    ['an RTF under another name', () => textFile('a.txt', '{\\rtf1\\ansi 1. Services. Hosts.\\par\n2. Payment. Pays.\\par}'), /a\.txt is an RTF file.*save as \.docx/],
+    ['an .rtf by name', () => textFile('b.rtf', '1. Services. Hosts.\n2. Payment. Pays.', 'text/plain'), /b\.rtf is an RTF file/],
+    ['binary data named .txt', () => textFile('c.txt', Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 1, 2, 3])), /c\.txt is not readable as text/],
+    ['text with NULs', () => textFile('d.txt', '1. A\0\0\n2. B\0'), /d\.txt is not readable as text/],
+    ['UTF-16 without a byte order mark', () => textFile('e.txt', Buffer.from('1. A. “x”\n2. B. y', 'utf16le')), /e\.txt is not readable as text/],
     ['an image', () => textFile('scan.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'image/png'), /scan\.png is not a DOCX, PDF or text file/],
     ['another zip', () => textFile('x.zip', 'PK\x03\x04', 'application/zip'), /x\.zip is not a DOCX/],
     ['an empty DOCX', () => textFile('e.docx', '', DOCX), /e\.docx is not a DOCX/],
