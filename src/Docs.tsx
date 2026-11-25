@@ -15,7 +15,7 @@ export default function Docs() {
           <tr><td><b>DOCX</b></td><td>Word: File › Save As › Word Document (.docx). Google Docs: File › Download › Microsoft Word. Old .doc files: open and re-save as .docx.</td><td>Paragraph text, headings and list numbering. Word auto-numbering is counted list by list, as Word prints it, headings included; a style that cannot be read as a clause number becomes 1., 1.1 or (a) by depth. Tracked changes are read as the current text; accept or reject them first if you want a clean base.</td></tr>
           <tr><td><b>PDF</b></td><td>The PDF the other side sent. It must have a text layer: if you cannot select text in a viewer, run OCR first (Preview, Acrobat or <code>ocrmypdf</code>).</td><td>Text reconstructed line by line from glyph positions; larger or bold lines become headings; page numbers and rotated margin stamps are dropped; a section number wrapped onto the next line stays in its sentence. Columns and footnotes may interleave.</td></tr>
           <tr><td><b>Markdown</b></td><td>A .md file, or Markdown pasted from a GitHub contract repo (Common Paper, Bonterms).</td><td>Bold, emphasis, links and inline HTML are stripped. Indented ordered lists are renumbered the way they render: “8.” then an indented “1.” becomes 8.1, an indented “a.” becomes (a).</td></tr>
-          <tr><td><b>Text</b></td><td>Paste from anywhere, or a .txt file.</td><td>Exactly what you paste. Keep one clause per line or paragraph.</td></tr>
+          <tr><td><b>Text</b></td><td>Paste from anywhere, or a .txt file.</td><td>Exactly what you paste. Files may be UTF-8, UTF-16 or Windows-1252; RTF must be saved as .docx first. Keep one clause per line or paragraph.</td></tr>
         </tbody>
       </table>
       <h3>Limits</h3>

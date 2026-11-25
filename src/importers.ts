@@ -4,12 +4,13 @@ import type { Format } from './store.ts'
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024
 
-export async function detectFormat(file: File): Promise<Format | null> {
+export async function detectFormat(file: File): Promise<Format | 'rtf' | null> {
   const head = new Uint8Array(await file.slice(0, 5).arrayBuffer())
   const sig = String.fromCharCode(...head)
   if (sig.startsWith('%PDF')) return 'pdf'
   if (sig.startsWith('PK')) return /\.docx$/i.test(file.name) || file.type.includes('wordprocessingml') ? 'docx' : null
-  if (/\.(txt|md|text|rtf)$/i.test(file.name) || file.type.startsWith('text/') || !file.type) return 'text'
+  if (sig === '{\\rtf' || /\.rtf$/i.test(file.name) || /\brtf$/.test(file.type)) return 'rtf'
+  if (/\.(txt|md|text)$/i.test(file.name) || file.type.startsWith('text/') || !file.type) return 'text'
   return null
 }
 
@@ -18,11 +19,28 @@ export async function readFile(file: File): Promise<{ format: Format; text: stri
   if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is ${(file.size / 1048576).toFixed(1)} MB; the limit is 15 MB.`)
   const format = await detectFormat(file)
   if (!format) throw new Error(`${file.name} is not a DOCX, PDF or text file. Old .doc files: save as .docx first.`)
-  if (format === 'text') { const t = await file.text(); return { format, text: /\.md$/i.test(file.name) || looksLikeMarkdown(t) ? markdownToText(t) : t } }
+  if (format === 'rtf') throw new Error(`${file.name} is an RTF file. Open it in Word and save as .docx, then import that.`)
   const buf = await file.arrayBuffer()
+  if (format === 'text') {
+    const { text: t, encoding } = decodeText(buf, file.name)
+    return { format, text: /\.md$/i.test(file.name) || looksLikeMarkdown(t) ? markdownToText(t) : t, notes: encoding === 'windows-1252' ? ['This file is not UTF-8; it was read as Windows-1252. Check that quotes and accents look right.'] : [] }
+  }
   if (format === 'docx') return { format, text: await docxToText(buf) }
   const { text, empty } = await pdfToText(buf)
   return { format, text, notes: empty.length ? [emptyPagesNote(empty)] : [] }
+}
+
+/** Text of a UTF-8, UTF-16 (with a byte order mark) or Windows-1252 file; throws for data that is not text. */
+export function decodeText(buf: ArrayBuffer, name: string): { text: string; encoding: string } {
+  const b = new Uint8Array(buf)
+  const notText = () => new Error(`${name} is not readable as text. Save it as UTF-8 text, .docx or PDF, then import that.`)
+  const decode = (encoding: string) => { try { return new TextDecoder(encoding, { fatal: true }).decode(buf) } catch { return null } }
+  const encoding = b[0] === 0xff && b[1] === 0xfe ? 'utf-16le' : b[0] === 0xfe && b[1] === 0xff ? 'utf-16be' : decode('utf-8') !== null ? 'utf-8' : 'windows-1252'
+  const text = decode(encoding)
+  // Text has no NULs and next to no other control characters; Windows-1252 leaves five bytes without a meaning.
+  const bad = encoding === 'windows-1252' ? /[\x00-\x08\x0e-\x1f\x7f\x81\x8d\x8f\x90\x9d]/g : /[\x00-\x08\x0e-\x1f]/g
+  if (text === null || text.includes('\0') || (text.match(bad)?.length ?? 0) > text.length / 100) throw notText()
+  return { text, encoding }
 }
 
 /** True when pasted or loaded text is raw Markdown (headings, bold titles, inline HTML, nested list indents). */
