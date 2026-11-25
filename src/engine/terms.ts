@@ -86,6 +86,8 @@ export function termReport(clauses: Clause[]): { defs: Definition[]; findings: T
       // Names of statutes and treaties ("the Health Insurance Portability and Accountability Act", "the International Sale of Goods").
       const after = c.body.slice(m.index! + m[0].length, m.index! + m[0].length + 60)
       if (/^(?:\s+(?:and|of|for|on|[A-Z][a-z]+))*\s+(?:Act|Convention|Code|Regulation|Directive|Goods)\b/.test(after) || /Convention[^.]{0,40}$/.test(c.body.slice(Math.max(0, m.index! - 60), m.index!))) continue
+      // "Section 365(n) of the Bankruptcy Code" cites a statute.
+      if (/\s(?:Act|Code|Convention|Regulation|Directive)$/.test(phrase) && /\d[\w.()]*\s+of\s+$/.test(c.body.slice(Math.max(0, m.index! - 30), m.index!))) continue
       if (byTerm.has(phrase) || definedStems.has(stem(phrase))) continue
       // Inside a quoted definition, or a longer defined term that starts with this phrase.
       if ([...byTerm.keys()].some(t => t.startsWith(phrase + ' '))) continue

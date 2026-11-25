@@ -118,7 +118,6 @@ test('#10 one Word list keeps counting across paragraphs', async ({ page }) => {
 })
 
 test('#11 statutes are not references; lower-case clause references are', async ({ page }) => {
-  test.fail()
   const t = `1. Release. A release under Section 1542 of the California Civil Code, Section 365(n) of the Bankruptcy Code and Article 28 of the GDPR.\n2. Term. Ends as set out in clause 9.9 of this deed.\n`
   await matter(page, [t, t])
   await tab(page, 'Terms & refs')
