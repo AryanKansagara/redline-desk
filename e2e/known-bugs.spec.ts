@@ -17,7 +17,6 @@ test('#2 amounts: unseparated digits, unit words and currency', async ({ page })
 })
 
 test('#3 a capitalisation-only edit is a change', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. Use. Receiver will protect all ${s}.${other}`
   await matter(page, [t('Confidential Information'), t('confidential information')])
   await ready(page)

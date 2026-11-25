@@ -37,7 +37,9 @@ export function similarity(x: string, y: string): number {
   return (2 * both) / (na + nb)
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
+/** For pairing only: letter case is ignored when finding a clause's counterpart, never when deciding whether it changed. */
+const norm = (s: string) => squash(s).toLowerCase()
 
 function clauseSim(a: Clause, b: Clause): number {
   const body = similarity(a.body, b.body)
@@ -72,7 +74,8 @@ export function align(A: Clause[], B: Clause[]): Pair[] {
   B.forEach((c, j) => { const k = norm(c.title + '|' + c.body); byText.set(k, [...(byText.get(k) ?? []), j]) })
   A.forEach((c, i) => {
     const list = byText.get(norm(c.title + '|' + c.body))
-    const j = list?.find(j => matchB[j] < 0)
+    const free = list?.filter(j => matchB[j] < 0)
+    const j = free?.find(j => squash(B[j].title) === squash(c.title) && squash(B[j].body) === squash(c.body)) ?? free?.[0]
     if (j !== undefined && (c.body || c.title)) { matchA[i] = j; matchB[j] = i; sims.set(`${i}:${j}`, 1) }
   })
   // Pass 2: best remaining pairs by similarity, ties broken by closeness in position.
@@ -86,8 +89,9 @@ export function align(A: Clause[], B: Clause[]): Pair[] {
   const pairs: Pair[] = []
   matched.forEach((i, idx) => {
     const j = matchA[i], a = A[i], b = B[j]
-    const modified = norm(a.body) !== norm(b.body) || norm(a.title) !== norm(b.title)
-    pairs.push({ a: i, b: j, sim: sims.get(`${i}:${j}`) ?? 1, modified, moved: !keep.has(idx), renumbered: (a.num ?? '') !== (b.num ?? ''), ops: modified ? diffWords(a.body, b.body) : undefined, titleWas: norm(a.title) !== norm(b.title) ? a.title : undefined })
+    const retitled = squash(a.title) !== squash(b.title)
+    const modified = retitled || squash(a.body) !== squash(b.body)
+    pairs.push({ a: i, b: j, sim: sims.get(`${i}:${j}`) ?? 1, modified, moved: !keep.has(idx), renumbered: (a.num ?? '') !== (b.num ?? ''), ops: modified ? diffWords(a.body, b.body) : undefined, titleWas: retitled ? a.title : undefined })
   })
   A.forEach((_, i) => { if (matchA[i] < 0) pairs.push({ a: i, b: null, sim: 0, modified: true, moved: false, renumbered: false }) })
   B.forEach((_, j) => { if (matchB[j] < 0) pairs.push({ a: null, b: j, sim: 0, modified: true, moved: false, renumbered: false }) })
