@@ -13,13 +13,16 @@ export async function detectFormat(file: File): Promise<Format | null> {
   return null
 }
 
-export async function readFile(file: File): Promise<{ format: Format; text: string }> {
+/** `notes` are problems the reader must see before the version is added. */
+export async function readFile(file: File): Promise<{ format: Format; text: string; notes?: string[] }> {
   if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is ${(file.size / 1048576).toFixed(1)} MB; the limit is 15 MB.`)
   const format = await detectFormat(file)
   if (!format) throw new Error(`${file.name} is not a DOCX, PDF or text file. Old .doc files: save as .docx first.`)
   if (format === 'text') { const t = await file.text(); return { format, text: /\.md$/i.test(file.name) || looksLikeMarkdown(t) ? markdownToText(t) : t } }
   const buf = await file.arrayBuffer()
-  return { format, text: format === 'docx' ? await docxToText(buf) : await pdfToText(buf) }
+  if (format === 'docx') return { format, text: await docxToText(buf) }
+  const { text, empty } = await pdfToText(buf)
+  return { format, text, notes: empty.length ? [emptyPagesNote(empty)] : [] }
 }
 
 /** True when pasted or loaded text is raw Markdown (headings, bold titles, inline HTML, nested list indents). */
@@ -108,8 +111,12 @@ export async function docxToText(buf: ArrayBuffer): Promise<string> {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
 
-/** PDF -> text, rebuilding lines from glyph positions and marking larger or bold lines as headings. */
-export async function pdfToText(buf: ArrayBuffer): Promise<string> {
+const emptyPagesNote = (pages: number[]) => pages.length === 1
+  ? `Page ${pages[0]} has no readable text (it may be a scan). Nothing on it will be compared. Run OCR first if it has contract text.`
+  : `Pages ${pages.slice(0, -1).join(', ')} and ${pages.at(-1)} have no readable text (they may be scans). Nothing on them will be compared. Run OCR first if they have contract text.`
+
+/** PDF -> text and the pages that gave none, rebuilding lines from glyph positions and marking larger or bold lines as headings. */
+export async function pdfToText(buf: ArrayBuffer): Promise<{ text: string; empty: number[] }> {
   const pdfjs = await import('pdfjs-dist')
   const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
   pdfjs.GlobalWorkerOptions.workerSrc = worker
@@ -137,6 +144,7 @@ export async function pdfToText(buf: ArrayBuffer): Promise<string> {
   }
   const lines = all.filter(l => !/^\s*(page\s+)?\d+(\s+of\s+\d+)?\s*$/i.test(l.text))
   if (!lines.length) throw new Error('This PDF has no text layer (it is probably a scan). Run OCR first, then import it again.')
+  const empty = Array.from({ length: pdf.numPages }, (_, i) => i + 1).filter(p => !lines.some(l => l.page === p))
   const hs = lines.map(l => l.h).sort((a, b) => a - b)
   const body = hs[Math.floor(hs.length / 2)] || 10
   const out: string[] = []
@@ -152,5 +160,5 @@ export async function pdfToText(buf: ArrayBuffer): Promise<string> {
     out.push(l.text.trim())
     if (heading) out.push('')
   })
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+  return { text: out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n', empty }
 }
