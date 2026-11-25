@@ -128,7 +128,6 @@ test('#11 statutes are not references; lower-case clause references are', async 
 })
 
 test('#12 contract text never becomes a CSV formula', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. Def. ${s} (the "Widget").\n2. Use. Customer uses the Widget daily.\n`
   await matter(page, [t('=HYPERLINK(A1)'), t('Another thing')])
   const rows = await issuesCsv(page)

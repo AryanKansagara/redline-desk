@@ -254,6 +254,14 @@ test('CSV export escapes quotes, commas and newlines', () => {
   assert.equal(csv.split('\r\n')[1], 'high,§ 8.1 Cap,"Cap, low","Says ""3""\nmonths",Restore,conceded')
 })
 
+test('CSV export never writes a cell that runs as a formula, and leaves ordinary cells alone', () => {
+  const cell = (fallback: string) => issuesCsv([{ key: 'k', source: 'playbook', clauseId: null, clause: 'c', issue: 'i', detail: 'd', severity: 'high', fallback }]).split('\r\n').slice(1).join('\r\n').slice('high,c,i,d,'.length, -',open\r\n'.length)
+  for (const s of ['=HYPERLINK(A1)', '+1', '-1', '@SUM(A1)', '\t=1', '\r=1']) assert.equal(cell(s), `"'${s}"`)
+  assert.equal(cell('="a","b"'), `"'=""a"",""b"""`)
+  assert.equal(cell('a\rb'), '"a\rb"')
+  for (const s of ['', 'Restore', 'a = b', '30-day', "'quoted'", '§ 8.1 Cap', ' =1']) assert.equal(cell(s), s)
+})
+
 test('DOCX redline contains strikethrough deletions and underlined insertions', async () => {
   const { Packer } = await import('docx')
   const c = compare(msa.versions[0].text, msa.versions[1].text, playbookById('msa-customer')!)

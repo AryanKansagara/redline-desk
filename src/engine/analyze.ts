@@ -145,7 +145,11 @@ export function trackRounds(rounds: Issue[][], conceded: string[] = []): Tracked
 
 // ---------- Exports ----------
 
-const csvCell = (s: string) => /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+/** Contract text is untrusted: a cell a spreadsheet would run as a formula is kept as text by a leading apostrophe. */
+function csvCell(s: string): string {
+  if (/^[=+\-@\t\r]/.test(s)) return `"'${s.replace(/"/g, '""')}"`
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 export function issuesCsv(issues: Issue[], statuses: Record<string, string> = {}): string {
   const head = ['Severity', 'Clause', 'Issue', 'Detail', 'Suggested fallback', 'Status']
   return [head, ...issues.map(i => [i.severity, i.clause, i.issue, i.detail, i.fallback, statuses[i.key] ?? 'open'])].map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
