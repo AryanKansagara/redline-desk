@@ -135,14 +135,12 @@ test('#12 contract text never becomes a CSV formula', async ({ page }) => {
 })
 
 test('#13 a written-out 120-day payment term fails a 30-day rule', async ({ page }) => {
-  test.fail()
   await matter(page, [`1. Payment. Customer will pay within one hundred twenty (120) days of invoice.${other}`], 'freelancer')
   await issuesReady(page)
   await expect(row(page, 'Payment within 30 days')).toContainText('120', soon)
 })
 
 test('#13 hyphenated periods are compared', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. Term. This contract runs for a ${s} period from signing.${other}`
   await matter(page, [t('12-month'), t('6-month')])
   await ready(page)

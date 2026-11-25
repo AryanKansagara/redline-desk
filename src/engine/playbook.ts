@@ -1,5 +1,5 @@
 // Playbook rules: user-editable checks per contract type, each with a severity and fallback language.
-import { durationDays, moneyValue, parseNumber, RE_MONEY } from './quant.ts'
+import { durationDays, moneyValue, NUMBER, parseNumber, PERIOD, RE_MONEY } from './quant.ts'
 import { clauseLabel, type Clause } from './segment.ts'
 
 export type Severity = 'high' | 'medium' | 'low'
@@ -26,11 +26,12 @@ const titleOrBody = (clauses: Clause[], re: RegExp) => {
   const byTitle = clauses.filter(c => re.test(c.title))
   return byTitle.length ? byTitle : clauses.filter(c => re.test(c.body))
 }
+const RE_PERIOD = new RegExp(PERIOD, 'gi')
 const firstDuration = (s: string): { months: number; raw: string } | null => {
-  for (const m of s.matchAll(/\b(\d+|[a-z]+(?:-[a-z]+)?)[\s-]*(?:\((\d+)\)[\s-]*)?(business days?|calendar days?|days?|months?|years?)\b/gi)) {
+  for (const m of s.matchAll(RE_PERIOD)) {
     const d = durationDays(m[1], m[2], m[3])
-    if (d === null) continue
-    const n = m[2] ? Number(m[2]) : parseNumber(m[1])!
+    if (d === null || /^week/i.test(m[3])) continue
+    const n = parseNumber(m[2] ?? m[1])!
     return { months: /^month/i.test(m[3]) ? n : /^year/i.test(m[3]) ? n * 12 : Math.round(d / 30.4), raw: m[0] }
   }
   return null
@@ -69,6 +70,55 @@ function feeCap(text: string): { months: number; raw: string } | null {
   const d = firstDuration(text.slice(fees, fees + 220))
   return d ? { months: d.months, raw: text.slice(fees, fees + 220).split(/[.;]/)[0] } : null
 }
+
+interface Term { days: number; raw: string }
+/** A period as calendar days, rounded up, because a business day is longer than a day. */
+const term = (num: string, paren: string | undefined, unit: string, raw: string): Term | null => {
+  const d = durationDays(num, paren, unit)
+  return d === null ? null : { days: Math.ceil(d), raw: raw.replace(/\s+/g, ' ').trim() }
+}
+const plainDays = (t: Term) => /\bcalendar days?$|(?<!business |working |banking )\bdays?$/i.test(t.raw)
+const saidAs = (t: Term) => plainDays(t) ? `${t.days} days` : `${t.raw} (about ${t.days} days)`
+
+const RE_NOTICE = [
+  // "at least ninety (90) days' prior notice", "three months before the end of the term"; then any day count after "at least".
+  new RegExp(String.raw`(?:at least|(?:no|not) less than|(?:no|not) later than|minimum of)\s+${PERIOD}['’]?\s+(?:(?!unless|if|and|or|but)\w+\s+){0,3}?(?:notice|before|prior|in advance)\b`, 'i'),
+  new RegExp(String.raw`(?:at least|(?:no|not) less than|(?:no|not) later than|minimum of)\s+\b(${NUMBER})[\s-]*(?:\((${NUMBER})\)[\s-]*)?((?:(?:business|working|banking|calendar)\s+)?days?\b)`, 'i'),
+  new RegExp(String.raw`${PERIOD}['’]?\s+(?:before|prior to)\b[^.;]{0,40}\b(?:end|expir\w*|renew\w*|anniversary)`, 'i'),
+]
+function noticeTerm(s: string): Term | null {
+  for (const re of RE_NOTICE) {
+    const m = s.match(re)
+    const t = m && term(m[1], m[2], m[3], m[0].match(new RegExp(PERIOD, 'i'))![0])
+    if (t) return t
+  }
+  return null
+}
+
+const PAY_PATTERNS = [
+  new RegExp(String.raw`\b(?:within|in|(?:no|not) (?:later|more) than)\s+(?:a (?:period|maximum) of\s+)?(?=${PERIOD})`, 'gi'),
+  new RegExp(String.raw`(?=${PERIOD}['’]?\s+(?:net\b|(?:after|from|following|of)\b))`, 'gi'),
+  new RegExp(String.raw`\b(?:payment|credit) (?:terms?|period)\b[^.;]{0,30}?(?=${PERIOD})`, 'gi'),
+]
+const RE_NET = new RegExp(String.raw`\bnet[\s-]?(${NUMBER})(?:\s*\((${NUMBER})\))?(?![\w%])`, 'i')
+function payTerm(s: string): Term | null {
+  const found: { at: number; t: Term }[] = []
+  for (const re of PAY_PATTERNS) for (const m of s.matchAll(re)) {
+    const at = m.index! + m[0].length, p = s.slice(at).match(new RegExp(`^${PERIOD}`, 'i'))
+    // "fees paid in twelve (12) months before the claim" looks back; it is not when payment is due.
+    if (!p || /^\s*(?:period\s+)?(?:immediately\s+)?(?:before|preceding|prior)\b/i.test(s.slice(at + p[0].length))) continue
+    const t = term(p[1], p[2], p[3], p[0])
+    if (t) found.push({ at, t })
+  }
+  const net = s.match(RE_NET), n = net && parseNumber(net[2] ?? net[1])
+  if (net && n !== null) found.push({ at: net.index!, t: { days: n!, raw: `${n} days` } })
+  return found.sort((x, y) => x.at - y.at)[0]?.t ?? null
+}
+const RE_PAY = /\b(?:pay|pays|paid|payable|payments?|due|invoices?|remit\w*|net)\b/i
+const RE_SIDE = /\b(?:liabilit|refund|reimburs|disput|suspen|terminat|interest|late\b|overdue)/i
+const RE_PAY_NOW = /\b(?:pay|pays|payable|due|payment)\b[^.;]{0,60}\b(?:(?:up)?on (?:receipt|demand|signing|signature|execution|delivery|completion)|immediately|in advance)\b/i
+const RE_MUST_PAY = /\b(?:will|shall|must|agrees? to)\s+(?:promptly\s+)?pay\b|\bpays\b|\binvoices?\b[^.]*\b(?:due|payable)\b/i
+const RE_OTHER_FEES = /\b(?:attorney|legal|lawyer|counsel|court|filing|termination|cancellation|kill)\w*['’]?s?['’]?\s+fees?/i
 
 export function governingLaw(text: string): string | null {
   const m = text.match(/governed by(?:,? and (?:construed|interpreted) in accordance with,?)? the (?:internal )?laws? of (?:the )?(?:State of |Commonwealth of |Province of )?([A-Z][A-Za-z]+(?:(?: and | )[A-Z][A-Za-z]+){0,3})/)
@@ -147,14 +197,25 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
       return [fail(r, gl ?? null, gl ? 'Governing law clause found but no jurisdiction could be read.' : 'No governing law clause found.')]
     }
     case 'paymentDays': {
-      for (const c of titleOrBody(clauses, /payment|invoice|fees/i)) {
-        const m = c.body.match(/within\s+(\w+(?:-\w+)?)\s*(?:\((\d+)\)\s*)?(?:calendar |business )?days|\bnet[\s-]?(\d+)/i)
-        if (!m) continue
-        const days = m[3] ? Number(m[3]) : (m[2] ? Number(m[2]) : parseNumber(m[1]))
-        if (days === null) continue
-        return [days > r.maxDays ? fail(r, c, `Payment due in ${days} days; playbook maximum is ${r.maxDays}.`) : pass(r, c, `Payment due in ${days} days.`)]
+      const titled = clauses.filter(c => /payment|invoic|fees/i.test(c.title) && !RE_OTHER_FEES.test(c.title))
+      const rest = clauses.filter(c => !titled.includes(c) && /payment|invoice|fees/i.test(c.body))
+      const verdict = (c: Clause, t: Term) => t.days > r.maxDays ? fail(r, c, `Payment due in ${saidAs(t)}; playbook maximum is ${r.maxDays}.`) : pass(r, c, `Payment due in ${saidAs(t)}.`)
+      const first = (cs: Clause[], ok: (s: string) => boolean) => {
+        for (const c of cs) for (const s of sentences(c.body)) { const t = ok(s) ? payTerm(s) : null; if (t) return verdict(c, t) }
+        return null
       }
-      return [pass(r, null, 'No payment period found.')]
+      // The sentence about paying comes before ones about refunds, disputes or late interest.
+      const main = (s: string) => RE_PAY.test(s) && !RE_SIDE.test(s)
+      const found = first(titled, main) ?? first(rest, main)
+      if (found) return [found]
+      const now = [...titled, ...rest].find(c => RE_PAY_NOW.test(c.body) && !RE_OTHER_FEES.test(c.body))
+      if (now) return [pass(r, now, 'Payment due at once.')]
+      const other = first(titled, s => RE_PAY.test(s)) ?? first(titled, () => true) ?? (titled.length ? null : first(rest, s => RE_PAY.test(s)))
+      if (other) return [other]
+      const clause = titled[0] ?? rest.find(c => RE_MUST_PAY.test(c.body) && !RE_OTHER_FEES.test(c.body))
+      const ph = clause && placeholder(clause.body, 'Payment Period|Payment Terms?|Due Date')
+      if (ph) return [fail(r, clause, `The payment period is ${elsewhere(ph)}. Check it is no more than ${r.maxDays} days.`)]
+      return [clause ? fail(r, clause, 'Payment clause found but no payment period could be read.') : pass(r, null, 'No payment period found.')]
     }
     case 'ipScope': {
       const cs = clauses.filter(c => /assign/i.test(c.body) && /intellectual property|work product|deliverables|inventions/i.test(c.body))
@@ -179,12 +240,11 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
     case 'autoRenewal': {
       const c = clauses.find(c => /automatic(?:ally)? renew|auto-?renew|renews? automatically/i.test(c.body))
       if (!c) return [pass(r, null, 'No automatic renewal.')]
-      const m = c.body.match(/(?:at least|no less than|not less than|no later than|minimum of)\s+(\w+(?:-\w+)?)\s*(?:\((\d+)\)\s*)?(?:calendar |business )?days/i)
-      const n = m ? (m[2] ? Number(m[2]) : parseNumber(m[1])) : null
-      const ph = n === null && placeholder(c.body, 'Notice Date|Notice Period|Renewal Date')
+      const t = noticeTerm(c.body)
+      const ph = t === null && placeholder(c.body, 'Notice Date|Notice Period|Renewal Date')
       if (ph) return [fail(r, c, `Renews automatically; the opt-out deadline is ${elsewhere(ph)}. Check it is no more than ${r.maxNoticeDays} days before renewal.`)]
-      if (n === null) return [fail(r, c, 'Renews automatically with no notice window to opt out.')]
-      return [n > r.maxNoticeDays ? fail(r, c, `Renews automatically unless you give ${n} days' notice; playbook maximum is ${r.maxNoticeDays}.`) : pass(r, c, `${n}-day notice window.`)]
+      if (t === null) return [fail(r, c, 'Renews automatically with no notice window to opt out.')]
+      return [t.days > r.maxNoticeDays ? fail(r, c, `Renews automatically unless you give ${plainDays(t) ? `${t.days} days'` : saidAs(t)} notice; playbook maximum is ${r.maxNoticeDays}.`) : pass(r, c, plainDays(t) ? `${t.days}-day notice window.` : `Notice window of ${saidAs(t)}.`)]
     }
     case 'mutual': {
       const mutual = /\b(each|either) party\b[^.]{0,120}\b(disclos|receiv)|\bmutual\b/i.test(all) && !/\bonly (?:the )?\w+(?: \w+)? (?:will|shall|may) disclose|one-way|solely (?:to|by) /i.test(all)
