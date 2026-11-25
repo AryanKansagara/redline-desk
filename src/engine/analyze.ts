@@ -3,7 +3,7 @@ import { align, rows, summary, type Pair, type Row } from './align.ts'
 import { runPlaybook, type Playbook, type Severity } from './playbook.ts'
 import { quantChanges, type QuantChange } from './quant.ts'
 import { clauseLabel, clauseText, segment, type Clause, type Doc } from './segment.ts'
-import { termChanges, termReport, type TermChange } from './terms.ts'
+import { definitions, termChanges, termReport, type TermChange } from './terms.ts'
 import { checkRefs, type XRef } from './xref.ts'
 
 export interface Issue {
@@ -24,7 +24,7 @@ export const bySeverity = (a: Issue, b: Issue) => SEV_ORDER[a.severity] - SEV_OR
 const labelOf = (clauses: Clause[], id: string | null) => { const c = id ? clauses.find(c => c.id === id) : undefined; return c ? clauseLabel(c) : 'Whole agreement' }
 
 /** Issues in one version on its own (or relative to the previous version when given). */
-export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[]): Issue[] {
+export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[], before?: XRef[]): Issue[] {
   const out: Issue[] = []
   const seen = new Set<string>()
   for (const f of runPlaybook(pb, doc.clauses)) {
@@ -34,7 +34,7 @@ export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[]
     seen.add(key)
     out.push({ key, source: 'playbook', clauseId: f.clauseId, clause: f.clause, issue: f.rule, detail: f.message, severity: f.severity, fallback: f.fallback })
   }
-  for (const r of checkRefs(doc.clauses, prev?.clauses, pairs)) {
+  for (const r of checkRefs(doc.clauses, prev?.clauses, pairs, before)) {
     if (r.status === 'ok') continue
     out.push({ key: `xref:${r.target}`, source: 'xref', clauseId: r.clauseId, clause: labelOf(doc.clauses, r.clauseId), issue: r.status === 'stale' ? `Stale reference to ${r.raw}` : `Broken reference to ${r.raw}`, detail: r.detail, severity: 'high', fallback: `Update the reference so it points to the intended clause.` })
   }
@@ -67,33 +67,47 @@ export function compare(textA: string, textB: string, pb: Playbook): Comparison 
   return compareDocs(a, b, pb)
 }
 
-export function compareDocs(a: Doc, b: Doc, pb: Playbook): Comparison {
+/** `before` is what the round that ended in `a` found, so that what it left broken stays an issue until it is fixed. */
+export function compareDocs(a: Doc, b: Doc, pb: Playbook, before?: { refs: XRef[]; issues: Issue[] }): Comparison {
   const pairs = align(a.clauses, b.clauses)
   const views = pairs.map(p => {
     const ca = p.a !== null ? a.clauses[p.a] : null, cb = p.b !== null ? b.clauses[p.b] : null
     return { pair: p, a: ca, b: cb, quants: ca && cb && p.modified ? quantChanges(clauseText(ca), clauseText(cb)) : [] }
   })
   const terms = termChanges(a.clauses, b.clauses)
-  const issues = versionIssues(b, pb, a, pairs)
+  const issues = versionIssues(b, pb, a, pairs, before?.refs)
   const defClause = (t: string) => b.clauses.find(c => c.body.includes(`"${t}"`) || c.body.includes(`“${t}”`))
+  const used = (term: string) => b.clauses.some(c => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(c.body))
   for (const t of terms) {
     if (t.kind === 'added') continue
-    const usedInB = b.clauses.some(c => new RegExp(`\\b${t.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(c.body))
-    if (t.kind === 'removed' && !usedInB) continue
+    if (t.kind === 'removed' && !used(t.term)) continue
     const c = defClause(t.term) ?? null
     out(issues, { key: `def:${t.kind}:${t.term}`, source: t.kind === 'changed' ? 'change' : 'terms', clauseId: c?.id ?? null, clause: c ? clauseLabel(c) : 'Definitions', issue: t.kind === 'changed' ? `Definition of “${t.term}” changed` : `Definition of “${t.term}” removed but still used`, detail: t.kind === 'changed' ? `Was: ${t.before}  Now: ${t.after}` : `Was: ${t.before}`, severity: t.kind === 'removed' ? 'high' : 'medium', fallback: t.before ?? '' })
+  }
+  // A definition dropped in an earlier round is still missing until it is restored or its last use goes.
+  const defined = new Set(definitions(b.clauses).map(d => d.term))
+  for (const i of before?.issues ?? []) {
+    const term = i.key.startsWith(REMOVED) ? i.key.slice(REMOVED.length) : null
+    if (term !== null && !defined.has(term) && used(term)) out(issues, i)
   }
   for (const v of views) for (const q of v.quants) {
     if (!v.b) continue
     out(issues, { key: `num:${v.b.num ?? v.b.title}:${q.before}>${q.after}`, source: 'change', clauseId: v.b.id, clause: clauseLabel(v.b), issue: `${q.kind === 'money' ? 'Amount' : q.kind === 'duration' ? 'Period' : q.kind === 'date' ? 'Date' : q.kind === 'percent' ? 'Percentage' : 'Multiple'} changed`, detail: `${q.before ?? '(none)'} → ${q.after ?? '(removed)'}`, severity: 'low', fallback: q.before ? `Restore “${q.before}”.` : '' })
   }
-  return { a, b, pairs, rows: rows(pairs, a.clauses.length), views, summary: summary(pairs), terms, refs: checkRefs(b.clauses, a.clauses, pairs), issues: issues.sort(bySeverity) }
+  return { a, b, pairs, rows: rows(pairs, a.clauses.length), views, summary: summary(pairs), terms, refs: checkRefs(b.clauses, a.clauses, pairs, before?.refs), issues: issues.sort(bySeverity) }
 }
+const REMOVED = 'def:removed:'
 const out = (list: Issue[], i: Issue) => { if (!list.some(x => x.key === i.key)) list.push(i) }
 
-/** Issues per round, each round judged against the one before it (so stale references are caught). */
+/** Issues per round, each round judged against the one before it (so stale references are caught) and what that one left unfixed. */
 export function roundIssues(texts: string[], pb: Playbook): Issue[][] {
-  return texts.map((t, i) => i === 0 ? versionIssues(segment(t), pb) : compare(texts[i - 1], t, pb).issues.filter(x => x.source !== 'change'))
+  const docs = texts.map(segment)
+  let before: Comparison | undefined
+  return docs.map((d, i) => {
+    if (i === 0) return versionIssues(d, pb)
+    before = compareDocs(docs[i - 1], d, pb, before)
+    return before.issues.filter(x => x.source !== 'change')
+  })
 }
 
 // ---------- Negotiation tracker ----------

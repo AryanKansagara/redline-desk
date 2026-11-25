@@ -1,8 +1,8 @@
 // Cross-reference validation: "Section 7.2" pointing at clauses that no longer exist or have moved.
-import type { Pair } from './align.ts'
+import { align, type Pair } from './align.ts'
 import type { Clause } from './segment.ts'
 
-export interface XRef { clauseId: string; raw: string; target: string; title?: string; status: 'ok' | 'missing' | 'stale'; detail: string }
+export interface XRef { clauseId: string; raw: string; target: string; title?: string; status: 'ok' | 'missing' | 'stale'; detail: string; /** The clause a broken reference meant, so later versions can tell whether it was fixed. */ meant?: Clause; /** Position among the references of its clause. */ nth: number }
 
 const REF = String.raw`(?:\d{1,2}(?:\.\d{1,3})*(?:\([a-z0-9]{1,4}\))*|[IVXLC]{1,6}\b)`
 // A reference may carry the cited clause's title: "Sections 8.1 (Liability Cap) and 8.2 (Damages Waiver)".
@@ -81,35 +81,56 @@ function rewrittenRefs(doc: Clause[], prev?: Clause[], pairs?: Pair[]) {
 /**
  * Validates references in `doc`. When the previous version and the alignment are given, a reference whose
  * target was renumbered (so the number now lands on a different clause, or nowhere) is reported as stale.
+ * `before` is the previous version's result: what was broken there stays broken until the citation changes or its
+ * number lands on the meant clause again.
  */
-export function checkRefs(doc: Clause[], prev?: Clause[], pairs?: Pair[]): XRef[] {
+export function checkRefs(doc: Clause[], prev?: Clause[], pairs?: Pair[], before: XRef[] = []): XRef[] {
   const out: XRef[] = []
   const rewritten = rewrittenRefs(doc, prev, pairs)
-  for (const r of references(doc)) {
+  const refs = references(doc)
+  const targets = (list: { clauseId: string; target: string }[], id: string) => list.filter(r => r.clauseId === id).map(r => r.target)
+  /** The earlier broken reference that this one still is: same paired clause, same number, same place in the list (when the list kept its length). */
+  const carried = (r: { clauseId: string; target: string }, nth: number) => {
+    const p = prev && pairs?.find(p => p.b !== null && doc[p.b].id === r.clauseId)
+    if (!p || p.a === null) return undefined
+    const was = targets(before, prev![p.a].id), now = targets(refs, r.clauseId)
+    return before.find(x => x.meant && x.clauseId === prev![p.a!].id && x.target === r.target && (was.length !== now.length || x.nth === nth))
+  }
+  const counts = new Map<string, number>()
+  for (const r of refs) {
+    const nth = counts.get(r.clauseId) ?? 0
+    counts.set(r.clauseId, nth + 1)
     const hit = resolve(doc, r.target)
     let status: XRef['status'] = hit ? 'ok' : 'missing'
     let detail = hit ? `Points to ${hit.title || 'clause ' + hit.num}.` : `${r.raw} does not exist in this version.`
+    let meant: Clause | undefined
     // A reference this version wrote, and that lands somewhere, is taken as intended.
     const intended = hit && rewritten(r, hit)
     // The reference names its target's title: that settles whether it lands in the right place.
     if (r.title && hit?.title && hit.num === r.target) {
       if (!sameTitle(r.title, hit.title)) { status = 'stale'; detail = `${r.raw} is cited as “${r.title}”, but § ${hit.num} is ${hit.title}.` }
-      out.push({ ...r, status, detail })
+      out.push({ ...r, nth, status, detail })
       continue
     }
     if (prev && pairs && !intended) {
-      const old = resolve(prev, r.target)
+      const known = carried(r, nth)
+      const old = known?.meant ?? resolve(prev, r.target)
       const oldIdx = old ? prev.indexOf(old) : -1
+      // A clause that was deleted earlier may have been put back.
+      const added = oldIdx < 0 && known ? pairs.filter(p => p.a === null).map(p => doc[p.b!]) : []
+      const back = old && added.length ? align([old], added).find(p => p.a !== null && p.b !== null) : undefined
       const pair = oldIdx >= 0 ? pairs.find(p => p.a === oldIdx) : undefined
-      if (pair && pair.b !== null && doc[pair.b].num !== old!.num) {
-        const now = doc[pair.b]
-        if (!hit || hit !== now) { status = 'stale'; detail = `${r.raw} (${old!.title || 'the original clause'}) is now ${now.num ? '§ ' + now.num : 'unnumbered'}; this reference was not updated.` }
-      } else if (pair && pair.b === null) {
-        status = hit ? 'stale' : 'missing'
-        detail = hit ? `${r.raw} used to be ${old!.title || 'a clause'} (deleted); the number now lands on ${hit.title || 'a different clause'}.` : `${r.raw} (${old!.title || 'the referenced clause'}) was deleted in this version.`
+      const now = pair ? (pair.b !== null ? doc[pair.b] : null) : back ? added[back.b!] : null
+      const name = old?.title || 'the original clause'
+      if (now && (known ? hit !== now : now.num !== old!.num && hit !== now)) {
+        status = 'stale'; meant = now
+        detail = `${r.raw} (${name}) is now ${now.num ? '§ ' + now.num : 'unnumbered'}; this reference was not updated.`
+      } else if (!now && (pair || known)) {
+        status = hit ? 'stale' : 'missing'; meant = old
+        detail = hit ? `${r.raw} used to be ${old!.title || 'a clause'} (deleted); the number now lands on ${hit.title || 'a different clause'}.` : `${r.raw} (${old!.title || 'the referenced clause'}) was deleted${pair ? ' in this version' : ''}.`
       }
     }
-    out.push({ ...r, status, detail })
+    out.push({ ...r, nth, status, detail, ...(meant ? { meant } : {}) })
   }
   return out
 }

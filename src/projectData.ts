@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { compare, roundIssues, trackRounds, versionIssues, type Comparison } from './engine/analyze.ts'
+import { compare, roundIssues, trackRounds, type Comparison, type Issue } from './engine/analyze.ts'
 import { clonePlaybook, playbookById, STARTER_PLAYBOOKS, type Playbook } from './engine/playbook.ts'
 import { SAMPLES } from './engine/samples.ts'
 import { segment } from './engine/segment.ts'
@@ -10,9 +10,21 @@ export const sampleTexts = (id: string): Dataset | null => {
   return s ? Object.fromEntries(s.versions.map((v, i) => [`${id}-v${i + 1}`, v.text])) : null
 }
 
-export function buildVersion(id: string, label: string, fileName: string, format: Format, text: string, playbook: Playbook, prevText?: string): VersionMeta {
+/** Issues of every version. One whose predecessor's text is not on this device is judged on its own; one without text gets an empty list. */
+function issuesByVersion(texts: (string | undefined)[], playbook: Playbook): Issue[][] {
+  const out: Issue[][] = []
+  for (let i = 0; i < texts.length;) {
+    const end = texts.indexOf(undefined, i)
+    const run = texts.slice(i, end < 0 ? texts.length : end) as string[]
+    out.push(...roundIssues(run, playbook))
+    i += run.length
+    if (end >= 0) { out.push([]); i++ }
+  }
+  return out
+}
+
+export function buildVersion(id: string, label: string, fileName: string, format: Format, text: string, issues: Issue[]): VersionMeta {
   const doc = segment(text)
-  const issues = prevText !== undefined ? compare(prevText, text, playbook).issues.filter(i => i.source !== 'change') : versionIssues(doc, playbook)
   return { id, label, at: Date.now(), fileName, format, chars: text.length, clauses: doc.clauses.length, warnings: doc.warnings, issues }
 }
 
@@ -22,7 +34,8 @@ export async function createSampleProject(sampleId: string): Promise<Project> {
   const s = SAMPLES.find(x => x.id === sampleId)!
   const playbook = clonePlaybook(playbookById(s.playbookId)!)
   const now = Date.now()
-  const versions = s.versions.map((v, i) => ({ ...buildVersion(`${sampleId}-v${i + 1}`, v.label, v.fileName, 'text', v.text, playbook, s.versions[i - 1]?.text), at: now - (s.versions.length - i) * 86400000 * 3 }))
+  const issues = issuesByVersion(s.versions.map(v => v.text), playbook)
+  const versions = s.versions.map((v, i) => ({ ...buildVersion(`${sampleId}-v${i + 1}`, v.label, v.fileName, 'text', v.text, issues[i]), at: now - (s.versions.length - i) * 86400000 * 3 }))
   return saveProject({ id: uuid(), name: s.name, counterparty: s.counterparty, createdAt: now, updatedAt: now, playbook, versions, conceded: s.conceded ?? [], notes: s.conceded ? { 'msa-cap': 'Accepted 6 months in exchange for restoring the data breach carve-out (round 3).' } : {}, sampleId })
 }
 
@@ -34,19 +47,19 @@ export async function createBlankProject(name: string, playbookId?: string): Pro
 
 export async function addVersion(p: Project, v: { label: string; fileName: string; format: Format; text: string }, texts: Dataset): Promise<Project> {
   const id = uuid()
-  const prev = p.versions.at(-1)
-  const meta = buildVersion(id, v.label, v.fileName, v.format, v.text, p.playbook, prev ? texts[prev.id] : undefined)
+  const issues = issuesByVersion([...p.versions.map(x => texts[x.id] as string | undefined), v.text], p.playbook)
+  const meta = buildVersion(id, v.label, v.fileName, v.format, v.text, issues.at(-1)!)
   await putData(p.id, { ...texts, [id]: v.text })
   return saveProject({ ...p, versions: [...p.versions, meta], dataMissing: false })
 }
 
 /** Re-runs the playbook on every version after a rule edit, so synced issue lists stay current. */
 export function recomputeIssues(p: Project, texts: Dataset): VersionMeta[] {
+  const issues = issuesByVersion(p.versions.map(v => texts[v.id] as string | undefined), p.playbook)
   return p.versions.map((v, i) => {
     const t = texts[v.id]
     if (t === undefined) return v
-    const prevT = i > 0 ? texts[p.versions[i - 1].id] : undefined
-    return { ...buildVersion(v.id, v.label, v.fileName, v.format, t, p.playbook, prevT), at: v.at }
+    return { ...buildVersion(v.id, v.label, v.fileName, v.format, t, issues[i]), at: v.at }
   })
 }
 
