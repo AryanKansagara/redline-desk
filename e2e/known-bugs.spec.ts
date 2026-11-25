@@ -93,11 +93,21 @@ test('#8 an unfixed stale reference stays open in later rounds', async ({ page }
 })
 
 test('#9 PDF pages without text are named in the review', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await upload(page, pdf([['1. Services. Provider hosts.'], [], ['2. Payment. Customer pays.']]))
   await expect(dialog(page).locator('.outline li').first()).toBeVisible()
   await expect(dialog(page)).toContainText(/page 2/i, soon)
+})
+
+test('#9 a scan that only carries a page number is named too; complete files are not', async ({ page }) => {
+  const P = [['1. Services. Provider hosts.'], ['Page 2 of 4'], ['2. Payment. Customer pays.'], []]
+  await newMatter(page)
+  await upload(page, pdf(P))
+  await expect(dialog(page).getByRole('alert')).toContainText('Pages 2 and 4 have no readable text')
+  await confirmVersion(page, 1)
+  await upload(page, pdf([P[0], P[2]]))
+  await expect(dialog(page).locator('.outline li').first()).toBeVisible()
+  await expect(dialog(page)).not.toContainText('no readable text')
 })
 
 test('#10 one Word list keeps counting across paragraphs', async ({ page }) => {

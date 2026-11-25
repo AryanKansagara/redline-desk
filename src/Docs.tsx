@@ -22,7 +22,7 @@ export default function Docs() {
       <ul>
         <li>15 MB per file, 200 PDF pages. Typical NDAs and MSAs are well under 1 MB.</li>
         <li>Optional cloud sync of document text is capped at 1.5 MB per matter and off by default.</li>
-        <li>Scanned PDFs without a text layer are rejected with a message, never silently compared as empty.</li>
+        <li>Scanned PDFs without a text layer are rejected with a message, never silently compared as empty. When only some pages have no text, the import review names them.</li>
       </ul>
 
       <h2 id="structure">How clauses are found</h2>

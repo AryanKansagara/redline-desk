@@ -5,7 +5,7 @@ import { looksLikeMarkdown, markdownToText, readFile } from './importers.ts'
 import type { Format } from './store.ts'
 import { toast } from './ui.tsx'
 
-export interface Parsed { label: string; fileName: string; format: Format; text: string }
+export interface Parsed { label: string; fileName: string; format: Format; text: string; /** Problems found while reading the file. */ notes?: string[] }
 
 /** Guided import: pick a file or paste text, see what was detected, then confirm. */
 export function ImportVersion({ nextLabel, onDone, onCancel }: { nextLabel: string; onDone(v: Parsed): void; onCancel(): void }) {
@@ -18,9 +18,9 @@ export function ImportVersion({ nextLabel, onDone, onCancel }: { nextLabel: stri
   const take = async (file: File) => {
     setBusy(true); setErr(null)
     try {
-      const { format, text } = await readFile(file)
+      const { format, text, notes } = await readFile(file)
       if (!text.trim()) throw new Error('No text found in this file.')
-      setParsed({ label: nextLabel, fileName: file.name, format, text })
+      setParsed({ label: nextLabel, fileName: file.name, format, text, notes })
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
 
@@ -58,6 +58,7 @@ function Review({ parsed, onChange, onBack, onDone }: { parsed: Parsed; onChange
         <div><span className="muted small">Numbered</span><strong>{numbered}</strong></div>
         <div><span className="muted small">Defined terms</span><strong>{defs}</strong></div>
       </div>
+      {parsed.notes?.map(n => <div key={n} className="callout warn" role="alert">{n}</div>)}
       {doc.warnings.length > 0 ? (
         <div className="callout warn">
           <strong>Check these before you compare</strong>
