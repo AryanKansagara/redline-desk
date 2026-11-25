@@ -45,7 +45,7 @@ export default function Docs() {
         <li><b>Liability cap</b>: reads “fees paid in the N months”, “X times the fees” or a fixed amount, then compares it with your minimum.</li>
         <li><b>Term or survival length</b>: the period in matching sentences against a maximum or minimum. “In perpetuity” counts as unlimited.</li>
         <li><b>Governing law</b>: the jurisdiction in “governed by the laws of…” against an allowed list.</li>
-        <li><b>Payment terms</b>: “within N days” or “net N” against a maximum.</li>
+        <li><b>Payment terms</b>: “within N days”, “net N” or “N months after” against a maximum, in digits or words. A month counts as 30 days and a business day as 1.4. A payment clause whose period cannot be read is flagged.</li>
         <li><b>IP assignment scope</b>: flags assignment of pre-existing or unrelated work, and assignment that happens before payment.</li>
         <li><b>Non-compete / non-solicit</b>: flags either restriction.</li>
         <li><b>Auto-renewal</b>: flags automatic renewal with no opt-out window, or a notice window longer than your maximum.</li>
