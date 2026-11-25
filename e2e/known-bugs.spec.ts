@@ -161,13 +161,32 @@ test('#14 Windows-1252 quotes survive', async ({ page }) => {
 })
 
 test('#15 the HTML redline marks a changed title', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. ${s}. Provider grants Customer a right to use the platform.${other}`
   await matter(page, [t('Exclusive Licence'), t('Licence')])
   await tab(page, 'Issues')
   await page.getByRole('link', { name: 'HTML redline' }).click()
   await expect(page.locator('.redline-doc section').first()).toBeVisible()
   await expect(page.locator('.redline-doc')).toContainText('Exclusive Licence', soon)
+})
+
+test('#15 the HTML redline marks inserted, deleted, added and dropped headings', async ({ page }) => {
+  const body = (s: string) => `${s} Provider grants Customer a right to use the platform.`
+  const open = async (a: string, b: string) => {
+    await matter(page, [a, b])
+    await tab(page, 'Issues')
+    await page.getByRole('link', { name: 'HTML redline' }).click()
+    await expect(page.locator('.redline-doc section').first()).toBeVisible()
+  }
+  const heads = page.locator('.redline-doc h3')
+  await open(`1. ${body('Exclusive Licence.')}${other}3. Escrow.\n`, `1. ${body('Licence.')}${other}8. Reserved.\n`)
+  await expect(heads.locator('del')).toHaveText([/Exclusive/, '§ 3 Escrow'])
+  await expect(heads.locator('ins')).toHaveText(['§ 8 Reserved'])
+  await expect(heads.first()).toHaveText(/^§ 1 Exclusive Licence/)
+  await expect(heads.nth(1).locator('ins, del')).toHaveCount(0)
+  await open(`1. ${body('')}${other}`, `1. ${body('Licence.')}${other}`)
+  await expect(heads.locator('ins')).toHaveText(['Licence'])
+  await open(`1. ${body('Licence.')}${other}`, `1. ${body('')}${other}`)
+  await expect(heads.locator('del')).toHaveText(['Licence'])
 })
 
 test('#16 Kansas law is not Arkansas law', async ({ page }) => {

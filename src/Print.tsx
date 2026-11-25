@@ -1,9 +1,20 @@
 import { useEffect } from 'react'
 import { bySeverity } from './engine/analyze.ts'
-import { clauseLabel } from './engine/segment.ts'
+import { diffWords, type Op } from './engine/diff.ts'
+import { clauseLabel, type Clause } from './engine/segment.ts'
 import { useComparison, useProject, useTracker } from './projectData.ts'
 import { getDefaults } from './store.ts'
 import { Link, NotFound } from './ui.tsx'
+
+const Marked = ({ ops }: { ops: Op[] }) => <>{ops.map((o, k) => o.t === 'eq' ? <span key={k}>{o.s}</span> : o.t === 'ins' ? <ins key={k}>{o.s}</ins> : <del key={k}>{o.s}</del>)}</>
+
+/** Clause heading with its own redline: inserted, deleted, or a title that changed. */
+function Heading({ a, b, titleWas }: { a: Clause | null; b: Clause | null; titleWas?: string }) {
+  if (!b) return <del>{clauseLabel(a!)}</del>
+  if (!a) return <ins>{clauseLabel(b)}</ins>
+  if (titleWas === undefined) return <>{clauseLabel(b)}</>
+  return <>{b.num && `${clauseLabel({ ...b, title: '' })} `}<Marked ops={diffWords(titleWas, b.title)} /></>
+}
 
 /** Printable issues memo and HTML redline. Both render from the same comparison the app shows. */
 export default function Print({ id, kind }: { id: string; kind: 'memo' | 'redline' }) {
@@ -54,8 +65,8 @@ export default function Print({ id, kind }: { id: string; kind: 'memo' | 'redlin
               if (r.ghost) return <p key={i} className="muted small">[{clauseLabel(ca!)} moved to {clauseLabel(cmp.b.clauses[r.pair.b!])}]</p>
               return (
                 <section key={i}>
-                  <h3>{clauseLabel((cb ?? ca)!)} {r.pair.moved && <span className="badge moved">moved</span>}{r.pair.renumbered && ca?.num && cb && <span className="muted small"> (was {ca.num})</span>}</h3>
-                  <p>{r.pair.ops ? r.pair.ops.map((o, k) => o.t === 'eq' ? <span key={k}>{o.s}</span> : o.t === 'ins' ? <ins key={k}>{o.s}</ins> : <del key={k}>{o.s}</del>) : r.pair.a === null ? <ins>{cb!.body}</ins> : r.pair.b === null ? <del>{ca!.body}</del> : cb!.body}</p>
+                  <h3><Heading a={ca} b={cb} titleWas={r.pair.titleWas} /> {r.pair.moved && <span className="badge moved">moved</span>}{r.pair.renumbered && ca?.num && cb && <span className="muted small"> (was {ca.num})</span>}</h3>
+                  <p>{r.pair.ops ? <Marked ops={r.pair.ops} /> : r.pair.a === null ? <ins>{cb!.body}</ins> : r.pair.b === null ? <del>{ca!.body}</del> : cb!.body}</p>
                 </section>
               )
             })}
