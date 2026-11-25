@@ -190,7 +190,6 @@ test('#15 the HTML redline marks inserted, deleted, added and dropped headings',
 })
 
 test('#16 Kansas law is not Arkansas law', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await page.keyboard.press('Escape')
   await tab(page, 'Playbook')

@@ -121,8 +121,23 @@ const RE_MUST_PAY = /\b(?:will|shall|must|agrees? to)\s+(?:promptly\s+)?pay\b|\b
 const RE_OTHER_FEES = /\b(?:attorney|legal|lawyer|counsel|court|filing|termination|cancellation|kill)\w*['’]?s?['’]?\s+fees?/i
 
 export function governingLaw(text: string): string | null {
-  const m = text.match(/governed by(?:,? and (?:construed|interpreted) in accordance with,?)? the (?:internal )?laws? of (?:the )?(?:State of |Commonwealth of |Province of )?([A-Z][A-Za-z]+(?:(?: and | )[A-Z][A-Za-z]+){0,3})/)
+  const m = text.match(/governed by(?:,? and (?:construed|interpreted) in accordance with,?)? the (?:internal )?laws? of (?:the )?(?:State of |Commonwealth of |Province of )?([A-Z][A-Za-z'’]+(?:(?: and | of | )[A-Z][A-Za-z'’]+){0,4})/)
   return m ? m[1].trim() : null
+}
+
+const COUNTRY = /^(?:u\.?s\.?a?\.?|united states(?: of america)?|canada)$/
+/** "State of Delaware" -> delaware; "England" and "England and Wales" are one jurisdiction. Whole names only: Kansas is not Arkansas. */
+function jurisdictions(name: string): string[] {
+  const one = (s: string) => {
+    const t = s.replace(/^(?:the |state of |commonwealth of |province of )+/, '').replace(/ (?:laws?|city|county|u\.?s\.?a?\.?|united states(?: of america)?|canada|sar|special administrative region)$/, '').trim()
+    if (/^(?:england|wales)$/.test(t)) return 'england and wales'
+    if (t === "people's republic of china" || t === 'prc') return 'china'
+    return t === 'republic of china' ? 'taiwan' : t.replace(/^(?:republic|kingdom) of /, '')
+  }
+  const parts = name.toLowerCase().replace(/’/g, "'").replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim().split(/ and |, /).map(one).filter(Boolean)
+  // "Ontario and Canada": the province decides.
+  const local = parts.filter(x => !COUNTRY.test(x))
+  return local.length ? local : parts
 }
 
 /** A capitalised placeholder such as "the General Cap Amount" whose value lives on a cover page or order form. */
@@ -188,7 +203,8 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
         const law = governingLaw(c.body)
         if (!law) continue
         if (/^(?:Governing Law|Applicable Law|Jurisdiction)\b/.test(law)) return [fail(r, c, `Governing law is ${elsewhere(law)}. Confirm it is one of: ${r.allowed.join(', ')}.`)]
-        const ok = r.allowed.some(a => law.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(law.toLowerCase()))
+        const allowed = new Set(r.allowed.flatMap(jurisdictions))
+        const ok = jurisdictions(law).every(j => allowed.has(j))
         return [ok ? pass(r, c, `${law} law.`) : fail(r, c, `${law} law is not in the allowed list (${r.allowed.join(', ')}).`)]
       }
       const gl = titleOrBody(clauses, /governing law|governed by/i)[0]
