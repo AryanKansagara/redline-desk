@@ -26,29 +26,48 @@ const titleOrBody = (clauses: Clause[], re: RegExp) => {
   const byTitle = clauses.filter(c => re.test(c.title))
   return byTitle.length ? byTitle : clauses.filter(c => re.test(c.body))
 }
-const firstDuration = (s: string): { days: number; raw: string } | null => {
-  for (const m of s.matchAll(/\b(\d+|[a-z]+(?:-[a-z]+)?)\s*(?:\((\d+)\)\s*)?(business days?|calendar days?|days?|months?|years?)\b/gi)) {
+const firstDuration = (s: string): { months: number; raw: string } | null => {
+  for (const m of s.matchAll(/\b(\d+|[a-z]+(?:-[a-z]+)?)[\s-]*(?:\((\d+)\)[\s-]*)?(business days?|calendar days?|days?|months?|years?)\b/gi)) {
     const d = durationDays(m[1], m[2], m[3])
-    if (d !== null) return { days: d, raw: m[0] }
+    if (d === null) continue
+    const n = m[2] ? Number(m[2]) : parseNumber(m[1])!
+    return { months: /^month/i.test(m[3]) ? n : /^year/i.test(m[3]) ? n * 12 : Math.round(d / 30.4), raw: m[0] }
   }
   return null
 }
-const months = (days: number) => Math.round(days / 30.4)
 /** User-typed patterns: fall back to a literal match if the regular expression is invalid. */
 const userRe = (src: string) => { try { return new RegExp(src, 'i') } catch { return new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } }
 
-/** Parses a liability cap: months of fees, a multiple of annual fees, or a fixed amount. */
+const FEE_MONTHS: Record<string, number> = { annual: 12, yearly: 12, quarterly: 3, monthly: 1 }
+
+/**
+ * Parses a liability cap: months of fees, a multiple of the fees of a period, or a fixed amount.
+ * A "lesser of" cap carries both arms, because either one may be the limit.
+ */
 export function parseCap(text: string): { months?: number; amount?: number; raw: string } | null {
-  const mult = text.match(/\b(\d+(?:\.\d+)?|[a-z]+)\s*(?:\((\d+(?:\.\d+)?)\)\s*)?(?:times|x)\s+(?:the\s+)?(?:total\s+|aggregate\s+)?(?:annual\s+)?(?:fees|amounts)/i)
-  if (mult) { const n = mult[2] ? Number(mult[2]) : parseNumber(mult[1]); if (n !== null) return { months: n * 12, raw: mult[0] } }
-  const fees = text.search(/\b(fees|amounts)\b[^.]{0,80}\b(paid|payable)/i)
-  if (fees >= 0) {
-    const d = firstDuration(text.slice(fees, fees + 220))
-    if (d) return { months: months(d.days), raw: text.slice(fees, fees + 220).split(/[.;]/)[0] }
-  }
   const money = text.match(new RegExp(RE_MONEY.source, 'i'))
-  if (money) return { amount: moneyValue(money[0]), raw: money[0] }
-  return null
+  const fees = feeCap(text)
+  if (fees && money && /\b(?:lesser|lower|smaller|least) of\b|\bwhichever is (?:the )?(?:less|lesser|lower|smaller)\b/i.test(text)) return { ...fees, amount: moneyValue(money[0]), raw: money[0] }
+  return fees ?? (money ? { amount: moneyValue(money[0]), raw: money[0] } : null)
+}
+
+function feeCap(text: string): { months: number; raw: string } | null {
+  const mult = text.match(/\b(\d+(?:\.\d+)?|[a-z]+)\s*(?:\((\d+(?:\.\d+)?)\)\s*)?(?:times|x)\s+(?:the\s+)?(?:total\s+|aggregate\s+)?(?:(annual|yearly|quarterly|monthly)\s+)?(?:fees|amounts)/i)
+  const n = mult ? (mult[2] ? Number(mult[2]) : parseNumber(mult[1])) : null
+  if (mult && n !== null) {
+    const rest = text.slice(mult.index! + mult[0].length).split(/[.;]/)[0]
+    // "two times the fees paid in the three (3) months before the claim" is six months of fees, not two years.
+    const span = rest.match(/\b(?:in|during|for|over|within)\s+(?:the|each|any|a)\s+(.{0,80})/i)
+    const per = mult[3] ? FEE_MONTHS[mult[3].toLowerCase()] : span ? firstDuration(span[1])?.months : undefined
+    if (per !== undefined) return { months: n * per, raw: mult[0] }
+    // No period means annual fees; a period that cannot be read must not be taken for a year.
+    if (!span || !/\b(?:days?|weeks?|months?|quarters?|half|period)\b/i.test(span[1])) return { months: n * 12, raw: mult[0] }
+    return /\byears?\b/i.test(span[1]) ? { months: n * 12, raw: mult[0] } : null
+  }
+  const fees = text.search(/\b(fees|amounts)\b[^.]{0,80}\b(paid|payable)/i)
+  if (fees < 0) return null
+  const d = firstDuration(text.slice(fees, fees + 220))
+  return d ? { months: d.months, raw: text.slice(fees, fees + 220).split(/[.;]/)[0] } : null
 }
 
 export function governingLaw(text: string): string | null {
@@ -90,7 +109,10 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
         const cap = parseCap(c.body)
         if (!cap) continue
         if (cap.months !== undefined && cap.months < r.minMonths) return [fail(r, c, `Cap is fees from ${cap.months} month${cap.months === 1 ? '' : 's'}; playbook minimum is ${r.minMonths}.`)]
-        if (cap.amount !== undefined && r.minAmount && cap.amount < r.minAmount) return [fail(r, c, `Cap is ${cap.raw}; playbook minimum is $${r.minAmount.toLocaleString('en-US')}.`)]
+        if (cap.amount !== undefined) {
+          if (r.minAmount) { if (cap.amount < r.minAmount) return [fail(r, c, `Cap is ${cap.raw}; playbook minimum is $${r.minAmount.toLocaleString('en-US')}.`)] }
+          else if (r.minMonths > 0) return [fail(r, c, `Cap is ${cap.months !== undefined ? 'the lesser of fees and ' : ''}${cap.raw}, a fixed amount that cannot be compared with ${r.minMonths} months of fees. Set a minimum amount in this rule to check it.`)]
+        }
         return [pass(r, c, cap.months !== undefined ? `Cap is ${cap.months} months of fees.` : `Cap is ${cap.raw}.`)]
       }
       const ph = cs.map(c => [c, placeholder(c.body, 'Cap Amount|Cap|Liability Amount|Liability Cap')] as const).find(x => x[1])
@@ -104,7 +126,7 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
         if (/perpetu|indefinite|in perpetuity/i.test(s) && r.maxMonths !== undefined) return [fail(r, c, `Runs indefinitely; playbook maximum is ${r.maxMonths} months.`)]
         const d = firstDuration(s)
         if (!d) continue
-        const m = months(d.days)
+        const m = d.months
         if (r.maxMonths !== undefined && m > r.maxMonths) return [fail(r, c, `${d.raw} exceeds the playbook maximum of ${r.maxMonths} months.`)]
         if (r.minMonths !== undefined && m < r.minMonths) return [fail(r, c, `${d.raw} is below the playbook minimum of ${r.minMonths} months.`)]
         return [pass(r, c, `${d.raw}.`)]

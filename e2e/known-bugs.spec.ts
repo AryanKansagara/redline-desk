@@ -33,7 +33,6 @@ test('#4 a new clause at the cited number does not hide a stale reference', asyn
 })
 
 test('#5 the cap rule reads multiples of a period and does not pass a bare amount', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. Limitation of Liability. Total liability will not exceed ${s}.${other}`
   await matter(page, [t('two (2) times the fees paid in the three (3) months before the claim'), t('$100')])
   await tab(page, 'Rounds')
