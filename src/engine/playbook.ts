@@ -140,6 +140,12 @@ function jurisdictions(name: string): string[] {
   return local.length ? local : parts
 }
 
+const RE_WILL_NOT = /\b(?:(?:shall|will|may|must|can|should) not|cannot|(?:agrees?|agreed|covenants?|undertakes?|promises?)\b[^.]{0,40}?\b(?:not to|to not|refrain from)|(?:shall|will|must) refrain from)\b/gi
+/** "shall not be prevented from competing" and "shall not restrict …" are the opposite of a restriction. */
+const RE_FREES = /^[\s,]*(?:(?:be|in any way|otherwise|be deemed to|be construed to)[\s,]+)*(?:prevent|restrict|prohibit|preclud|barred|bar\b|limit|hinder|stop|apply)/i
+/** Says someone will not do what `act` matches, in the words that follow. */
+const forbids = (text: string, act: RegExp) => [...text.matchAll(RE_WILL_NOT)].some(m => { const rest = text.slice(m.index! + m[0].length); return act.test(rest) && !RE_FREES.test(rest) })
+
 /** A capitalised placeholder such as "the General Cap Amount" whose value lives on a cover page or order form. */
 const placeholder = (text: string, key: string) => text.match(new RegExp(`\\b[Tt]he ((?:[A-Z][A-Za-z-]+ ){0,4}(?:${key}))\\b`))?.[1] ?? null
 const elsewhere = (term: string) => `set by “${term}”, which is filled in outside this text (cover page or order form)`
@@ -248,8 +254,8 @@ export function checkRule(r: Rule, clauses: Clause[]): Finding[] {
       const out: Finding[] = []
       for (const c of clauses) {
         const t = c.title + '. ' + c.body
-        if (r.forbid.includes('noncompete') && /non-?compet|shall not[^.]{0,140}\b(compete|competitive|competing)\b/i.test(t)) out.push(fail(r, c, 'Non-compete restriction.'))
-        else if (r.forbid.includes('nonsolicit') && /non-?solicit|shall not[^.]{0,100}\bsolicit/i.test(t)) out.push(fail(r, c, 'Non-solicitation restriction.'))
+        if (r.forbid.includes('noncompete') && (/non-?compet/i.test(t) || forbids(t, /^[^.]{0,140}\b(?:compete|competitive|competing)\b/i))) out.push(fail(r, c, 'Non-compete restriction.'))
+        else if (r.forbid.includes('nonsolicit') && (/non-?solicit/i.test(t) || forbids(t, /^[^.]{0,100}\bsolicit/i))) out.push(fail(r, c, 'Non-solicitation restriction.'))
       }
       return out.length ? out : [pass(r, null, 'None found.')]
     }
