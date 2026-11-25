@@ -209,8 +209,39 @@ test('#17 “will not compete” is a non-compete', async ({ page }) => {
   await expect(row(page, 'No non-compete')).toContainText('Non-compete restriction', soon)
 })
 
+test('#18 a saved concession on a forbidden phrase is kept after the keys changed', async ({ page }) => {
+  await matter(page, [`1. Memory. Receiver may use residuals freely.${other}`], 'nda-mutual')
+  await issuesReady(page)
+  await row(page, 'No residuals clause').getByRole('button', { name: 'Concede' }).click()
+  await expect(row(page, 'No residuals clause')).toHaveClass(/conceded/)
+  // Put the matter back into the form older builds saved.
+  await page.evaluate(() => new Promise<void>((res, rej) => {
+    const open = indexedDB.open('redline-desk', 1)
+    open.onsuccess = () => {
+      const s = open.result.transaction('projects', 'readwrite').objectStore('projects'), all = s.getAll()
+      all.onsuccess = () => {
+        const p = all.result[0]
+        p.conceded = ['nda-residuals']
+        p.notes = { 'nda-residuals': 'Agreed on the call' }
+        for (const i of p.versions[0].issues) if (i.key.startsWith('nda-residuals')) i.key = 'nda-residuals'
+        const put = s.put(p)
+        put.onsuccess = () => res()
+        put.onerror = () => rej(put.error)
+      }
+    }
+  }))
+  await page.reload()
+  await issuesReady(page)
+  await expect(row(page, 'No residuals clause')).toHaveClass(/conceded/)
+  await pasteText(page, `1. Memory. Receiver may use its residuals very freely.${other}`)
+  await confirmVersion(page, 2)
+  await tab(page, 'Rounds')
+  const r = page.locator('table.rounds tbody tr').filter({ hasText: 'No residuals clause' })
+  await expect(r.locator('.status')).toHaveText('Conceded')
+  await expect(r.locator('input.note')).toHaveValue('Agreed on the call')
+})
+
 test('#18 a concession does not cover a different forbidden phrase', async ({ page }) => {
-  test.fail()
   const t = (s: string) => `1. Memory. Receiver may use ${s} freely.${other}`
   await matter(page, [t('residuals')], 'nda-mutual')
   await issuesReady(page)
