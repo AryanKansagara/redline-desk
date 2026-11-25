@@ -62,43 +62,48 @@ export function markdownToText(md: string): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }
 
-/** DOCX -> text with numbering rebuilt from list nesting (Word auto-numbering is not in the text itself). */
+/** DOCX -> text with Word's automatic numbers, which are not in the text itself, written in front of their paragraphs. */
 export async function docxToText(buf: ArrayBuffer): Promise<string> {
   const mammoth = (await import('mammoth')).default
-  const { value: html } = await mammoth.convertToHtml({ arrayBuffer: buf })
+  const { markNumbers, takeMark } = await import('./wordList.ts')
+  const marked = await markNumbers(buf)
+  const { value: html } = await mammoth.convertToHtml({ arrayBuffer: marked.buf })
   const root = new DOMParser().parseFromString(html, 'text/html').body
   const lines: string[] = []
+  const squash = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim()
   // Paragraph texts of an element; line breaks become spaces so "Cover Page<br>for" does not run together.
   const paras = (el: Element): string[] => {
     el.querySelectorAll('br').forEach(b => b.replaceWith(' '))
     const ps = el.tagName === 'P' ? [el] : Array.from(el.querySelectorAll('p'))
-    return (ps.length ? ps : [el]).map(p => (p.textContent ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean)
+    return (ps.length ? ps : [el]).map(p => squash(p.textContent)).filter(Boolean)
   }
   const numbered = /^\s*(\(?[a-z0-9ivx]{1,3}[.)]|\d+(\.\d+)*\.?|article|section)\s/i
-  const walkList = (ol: Element, prefix: string, depth: number, start = 0) => {
-    let n = start
-    for (const li of Array.from(ol.children)) {
-      if (li.tagName !== 'LI') continue
-      n++
-      const label = depth === 0 ? `${n}.` : depth === 1 ? `${prefix}${n}` : `(${String.fromCharCode(96 + Math.min(n, 26))})`
-      const own = Array.from(li.childNodes).filter(c => !(c instanceof Element && (c.tagName === 'OL' || c.tagName === 'UL'))).map(c => c.textContent ?? '').join('').trim()
-      if (own) lines.push('', ol.tagName === 'OL' && !numbered.test(own) ? `${label} ${own}` : own)
-      for (const sub of Array.from(li.children)) if (sub.tagName === 'OL' || sub.tagName === 'UL') walkList(sub, depth === 0 ? `${n}.` : prefix, depth + 1)
-    }
-    return n
+  let clauses = false
+  const push = (raw: string) => {
+    const { text, label } = takeMark(raw, marked.labels)
+    if (!text) return
+    // "(a)" needs a numbered clause to belong to.
+    const l = label && (label.word && (clauses || !label.word.startsWith('(')) ? label.word : label.plain)
+    const line = l && !numbered.test(text) ? `${l} ${text}` : text
+    if (/^(\d|article\s|section\s|clause\s)/i.test(line)) clauses = true
+    lines.push('', line)
   }
-  // Word keeps counting a list across an interrupting table; a paragraph or heading in between starts a new list.
-  let top = 0
+  const walkList = (list: Element) => {
+    for (const li of Array.from(list.children)) {
+      const subs = Array.from(li.children).filter(c => c.tagName === 'OL' || c.tagName === 'UL')
+      push(Array.from(li.childNodes).filter(c => !subs.includes(c as Element)).map(c => c.textContent ?? '').join(''))
+      subs.forEach(walkList)
+    }
+  }
   for (const el of Array.from(root.children)) {
-    if (el.tagName === 'OL') top = walkList(el, '', 0, top)
-    else if (el.tagName === 'UL') walkList(el, '', 0)
+    if (el.tagName === 'OL' || el.tagName === 'UL') walkList(el)
     else if (el.tagName === 'TABLE') for (const tr of Array.from(el.querySelectorAll('tr'))) {
-      const cells = Array.from(tr.children).map(paras)
+      const cells = Array.from(tr.children).map(td => paras(td).map(t => takeMark(t, marked.labels).text).filter(Boolean))
       // A one-cell row is page layout (cover pages, boxed clauses): keep its paragraphs as paragraphs.
       if (cells.length === 1) for (const t of cells[0]) lines.push('', t)
       else if (cells.some(c => c.length)) lines.push('', cells.map(c => c.join(' ')).join(' | '))
     }
-    else { const t = paras(el).join(' '); if (t) { lines.push('', t); top = 0 } }
+    else push(paras(el).join(' '))
   }
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
 }

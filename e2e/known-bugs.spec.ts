@@ -101,7 +101,6 @@ test('#9 PDF pages without text are named in the review', async ({ page }) => {
 })
 
 test('#10 one Word list keeps counting across paragraphs', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await upload(page, await docx(['# Services. Provider hosts.', 'An ordinary paragraph.', '# Payment. Customer pays.']))
   await expect(dialog(page).locator('.outline li').first()).toBeVisible()

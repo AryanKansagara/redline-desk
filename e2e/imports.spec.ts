@@ -1,3 +1,4 @@
+import { Document, HeadingLevel, LevelFormat, Packer, Paragraph } from 'docx'
 import { clause, confirmVersion, dialog, DOCX, docx, download, expect, newMatter, pasteText, pdf, stat, tab, test, textFile, upload, type Upload } from './fixtures.ts'
 
 const outline = (page: import('@playwright/test').Page) => dialog(page).locator('.outline li b')
@@ -14,6 +15,29 @@ test('DOCX: auto-numbering is rebuilt and the version compares', async ({ page }
   await confirmVersion(page, 2)
   await expect(stat(page, 'modified')).toHaveText('1')
   await expect(clause(page, 'Payment').locator('.badge')).toHaveText(['thirty (30) days → forty-five (45) days'])
+})
+
+const level = (n: number, text: string, format: (typeof LevelFormat)[keyof typeof LevelFormat] = LevelFormat.DECIMAL) => ({ level: n, format, text })
+const word = async (children: Paragraph[]): Promise<Upload> => ({ name: 'lists.docx', mimeType: DOCX, buffer: await Packer.toBuffer(new Document({
+  numbering: { config: [
+    { reference: 'main', levels: [level(0, '%1.'), level(1, '%1.%2'), level(2, '(%3)', LevelFormat.LOWER_LETTER)] },
+    { reference: 'other', levels: [level(0, '%1.')] },
+  ] },
+  sections: [{ children }],
+})) })
+const item = (text: string, depth = 0, reference = 'main', instance = 0) => new Paragraph({ text, numbering: { reference, level: depth, instance } })
+
+test('DOCX: numbered headings and nested items share their list, across headings and paragraphs', async ({ page }) => {
+  await newMatter(page)
+  const h = (text: string) => new Paragraph({ text, heading: HeadingLevel.HEADING_1, numbering: { reference: 'main', level: 0 } })
+  await upload(page, await word([h('Services'), item('Hosting. Provider hosts.', 1), new Paragraph('An ordinary paragraph.'), item('first thing here', 2), new Paragraph('Another paragraph.'), item('second thing here', 2), item('Support. Provider answers.', 1), h('Payment'), item('Fees. Customer pays.', 1)]))
+  await expect(outline(page)).toHaveText(['§ 1 Services', '§ 1.1 Hosting', '§ 1.1(a)', '§ 1.1(b)', '§ 1.2 Support', '§ 2 Payment', '§ 2.1 Fees'])
+})
+
+test('DOCX: a different list, or a restarted one, starts again', async ({ page }) => {
+  await newMatter(page)
+  await upload(page, await word([item('Services. Hosts.'), item('Payment. Pays.'), new Paragraph('Further terms'), item('Scope. Hosting.', 0, 'other'), new Paragraph('More'), item('Extent. All of it.', 0, 'other'), new Paragraph('Annex'), item('Again. From the top.', 0, 'other', 1), item('Term. One year.')]))
+  await expect(outline(page)).toHaveText(['§ 1 Services', '§ 2 Payment', '§ 1 Scope', '§ 2 Extent', '§ 1 Again', '§ 3 Term'])
 })
 
 test('PDF: lines become clauses, page numbers are dropped', async ({ page }) => {
