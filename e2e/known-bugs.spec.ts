@@ -83,7 +83,6 @@ test('#7 undo brings the version and its text back in place', async ({ page }) =
 })
 
 test('#8 an unfixed stale reference stays open in later rounds', async ({ page }) => {
-  test.fail()
   const L = 'Liability. Each party caps its liability at the yearly fees.', I = 'Insurance. Provider keeps cover in force at all times.'
   const t = (a: string, b: string) => `1. ${a}\n2. ${b}\n3. Remedies. See Section 1 for the limit that applies here.\n`
   await matter(page, [t(L, I), t(I, L), t(I, L)])
