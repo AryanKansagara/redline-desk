@@ -1,4 +1,5 @@
 // File import, all in the browser: DOCX via mammoth, PDF via pdf.js (both lazy-loaded), plain text as is.
+import { wrapsReference } from './engine/segment.ts'
 import type { Format } from './store.ts'
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024
@@ -140,7 +141,9 @@ export async function pdfToText(buf: ArrayBuffer): Promise<string> {
     const heading = (l.h > body * 1.15 || l.bold) && l.text.length < 90
     const wrappedRef = prev && /\b(?:Sections?|Clauses?|Articles?|§)$/.test(prev.text.trim()) && /^\d/.test(l.text.trim())
     if (wrappedRef) { out[out.length - 1] += ' ' + l.text.trim(); return }
-    if (heading || gap > body * 1.9 || /^(\d+(\.\d+)*\.?|\([a-z0-9]+\)|[a-z][.)]|ARTICLE|Section)\s/.test(l.text.trim())) out.push('')
+    // A sentence that wraps onto "Section 5 of…" or "3.2 shall…" is not a new paragraph, also across a page break.
+    const wrapped = !heading && prev && (prev.page !== l.page || gap <= body * 1.9) && wrapsReference(prev.text.trim(), l.text.trim())
+    if (!wrapped && (heading || gap > body * 1.9 || /^(\d+(\.\d+)*\.?|\([a-z0-9]+\)|[a-z][.)]|ARTICLE|Section)\s/.test(l.text.trim()))) out.push('')
     out.push(l.text.trim())
     if (heading) out.push('')
   })
