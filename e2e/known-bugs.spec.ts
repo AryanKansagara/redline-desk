@@ -204,7 +204,6 @@ test('#16 Kansas law is not Arkansas law', async ({ page }) => {
 })
 
 test('#17 “will not compete” is a non-compete', async ({ page }) => {
-  test.fail()
   await matter(page, [`1. Conduct. Contractor will not compete with Client for one year.${other}`], 'freelancer')
   await issuesReady(page)
   await expect(row(page, 'No non-compete')).toContainText('Non-compete restriction', soon)
