@@ -34,7 +34,7 @@ export default function Docs() {
         <li><b>Word diff.</b> Inside each pair, a Myers shortest-edit diff runs on words, and replaced phrases are grouped so the redline reads naturally.</li>
         <li><b>Values.</b> Amounts, percentages, periods (“thirty (30) days”), dates and multiples (“two times the fees”) are extracted and shown as before → after.</li>
         <li><b>Defined terms.</b> Definitions written as <code>"X" means</code>, <code>(the "X")</code> or <code>each a "X"</code> are collected. You get unused terms, terms used like defined terms but never defined, inconsistent capitalisation, and definitions whose wording changed.</li>
-        <li><b>Cross-references.</b> Every “Section 7.2”, “Sections 3 and 4(a)” or “Article IV” is checked against the version’s numbering. A reference is <em>stale</em> when the clause it pointed to was renumbered or deleted and the number now lands somewhere else. When a reference names its target (“Section 12 (Confidentiality)”), the name is checked against the clause that number lands on, even in a single version.</li>
+        <li><b>Cross-references.</b> Every “Section 7.2”, “Sections 3 and 4(a)”, “clause 8.2” or “Article IV” is checked against the version’s numbering. A reference is <em>stale</em> when the clause it pointed to was renumbered or deleted and the number now lands somewhere else. When a reference names its target (“Section 12 (Confidentiality)”), the name is checked against the clause that number lands on, even in a single version. Sections of a named statute or regulation (“Article 28 of the GDPR”) are left out.</li>
       </ol>
 
       <h2 id="playbooks">Playbooks</h2>

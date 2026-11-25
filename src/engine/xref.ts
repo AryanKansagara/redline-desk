@@ -4,19 +4,41 @@ import type { Clause } from './segment.ts'
 
 export interface XRef { clauseId: string; raw: string; target: string; title?: string; status: 'ok' | 'missing' | 'stale'; detail: string; /** The clause a broken reference meant, so later versions can tell whether it was fixed. */ meant?: Clause; /** Position among the references of its clause. */ nth: number }
 
-const REF = String.raw`(?:\d{1,2}(?:\.\d{1,3})*(?:\([a-z0-9]{1,4}\))*|[IVXLC]{1,6}\b)`
+const REF = String.raw`(?:\d{1,2}(?:\.\d{1,3})*(?!\.?\d)(?:\([a-z0-9]{1,4}\))*|[IVXLC]{1,6}\b)`
 // A reference may carry the cited clause's title: "Sections 8.1 (Liability Cap) and 8.2 (Damages Waiver)".
 const CITED = String.raw`(?:\s*\([A-Z][^()]{2,60}\))?`
-const RE_XREF = new RegExp(String.raw`\b(Sections?|Clauses?|Articles?|§§?)\s*(${REF}${CITED}(?:\s*(?:,|and|or|through|to|–|-)\s*(?:Section\s+)?${REF}${CITED})*)`, 'g')
+const LIST = (ref: string) => String.raw`(${ref}${CITED}(?:\s*(?:,|and|or|through|to|–|-)\s*(?:[Ss]ection\s+)?${ref}${CITED})*)`
+// Lower-case "clause 8.2" is the usual UK style; after a lower-case word a letter such as "I" is not a number.
+const RE_XREF = new RegExp(String.raw`\b(?:(Sections?|Clauses?|Articles?|§§?)\s*${LIST(REF)}|(sections?|clauses?|articles?)\s+(?=\d)${LIST(REF)})`, 'g')
 const RE_ITEM = new RegExp(String.raw`(${REF})(?:\s*\(([A-Z][^()]{2,60})\))?`, 'g')
+
+// A statute, regulation or other outside instrument: "of the California Civil Code", "of Regulation (EU) 2016/679", "GDPR".
+const LAW = String.raw`(?:Acts?|Codes?|Regulations?|Directives?|Statutes?|Ordinances?|Conventions?|Constitution|Treaty|Laws?|Rules|GDPR|CCPA|CPRA|HIPAA|ERISA|UCC|DGCL|U\.?S\.?C|C\.?F\.?R|SCCs|Standard Contractual Clauses)`
+const OWN = String.raw`(?:Agreement|Contract|Deed|Terms|Schedule|Exhibit|Annex|Appendix|Addendum|Order|MSA|DPA|SOW)\b`
+const NAME = String.raw`(?:(?!${OWN})(?:[A-Z][\w.&’'-]*|\d{4}|\([^()]{1,40}\)|and(?!\s+the\b)|of|on|for|the|to|in),?\s+){0,10}?`
+const SUBPARTS = String.raw`(?:\s*(?:,|and|or|to|–|-)\s*\([a-z0-9]{1,4}\))*`
+const RE_LAW_AFTER = new RegExp(String.raw`^${SUBPARTS},?\s+(?:of\s+${NAME}${LAW}(?![\w-])|(?:(?:EU|UK)\s+)?GDPR\b)`)
+const RE_LAW_BEFORE = /(?:\b(?:Act|Code|GDPR|Regulations?|ERISA|HIPAA|UCC|D?FARS?)(?:\s+(?:of\s+)?\d{4})?|\bU\.?S\.?C\.?|\bC\.?F\.?R\.?)\s+$/
 
 export function references(clauses: Clause[]): { clauseId: string; raw: string; target: string; title?: string }[] {
   const out: { clauseId: string; raw: string; target: string; title?: string }[] = []
   for (const c of clauses) {
     for (const m of c.body.matchAll(RE_XREF)) {
-      for (const it of m[2].matchAll(RE_ITEM)) {
+      const word = m[1] ?? m[3]
+      let list = m[2] ?? m[4]
+      const before = c.body.slice(0, m.index!)
+      if (RE_LAW_BEFORE.test(before)) continue
+      if (RE_LAW_AFTER.test(c.body.slice(m.index! + m[0].length))) {
+        // "Section 5 and Section 28 of the GDPR": only the last one is the statute's.
+        const last = list.search(/[Ss]ection(?!.*[Ss]ection)/s)
+        if (last < 0) continue
+        list = list.slice(0, last)
+      }
+      for (const it of list.matchAll(RE_ITEM)) {
         const target = it[1].trim().replace(/\.$/, '')
-        if (target) out.push({ clauseId: c.id, raw: `${m[1].replace(/s$/, '')} ${target}`, target, ...(it[2] ? { title: it[2].trim() } : {}) })
+        // "sub-clause 2" counts within its own clause.
+        if (/\bsub-$/i.test(before) && !target.includes('.')) continue
+        if (target) out.push({ clauseId: c.id, raw: `${word.replace(/s$/, '')} ${target}`, target, ...(it[2] ? { title: it[2].trim() } : {}) })
       }
     }
   }
