@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Issue } from './engine/analyze.ts'
+import { migrateKeys, type Issue } from './engine/analyze.ts'
 import type { Playbook } from './engine/playbook.ts'
 
 /** Document text per version id. Stays on this device unless the user opts in to syncing it. */
@@ -92,7 +92,7 @@ const changeHooks = new Set<(p: Project) => void>()
 export const onProjectChange = (f: (p: Project) => void) => { changeHooks.add(f); return () => changeHooks.delete(f) }
 
 export async function loadProjects() {
-  projects = (await idbGetAll<Project>('projects')).sort((a, b) => b.updatedAt - a.updatedAt)
+  projects = (await idbGetAll<Project>('projects')).map(migrateKeys).sort((a, b) => b.updatedAt - a.updatedAt)
   loaded = true
   emit()
 }
@@ -105,7 +105,7 @@ export const getProjects = () => projects
 export const getProject = (id: string) => projects.find(p => p.id === id)
 
 export async function saveProject(p: Project, opts: { touch?: boolean; silent?: boolean } = {}) {
-  const next = opts.touch === false ? p : { ...p, updatedAt: Date.now() }
+  const next = migrateKeys(opts.touch === false ? p : { ...p, updatedAt: Date.now() })
   await idbPut('projects', next)
   const i = projects.findIndex(x => x.id === p.id)
   if (i >= 0) projects[i] = next

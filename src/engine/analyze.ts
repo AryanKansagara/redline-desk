@@ -23,6 +23,49 @@ export const bySeverity = (a: Issue, b: Issue) => SEV_ORDER[a.severity] - SEV_OR
 
 const labelOf = (clauses: Clause[], id: string | null) => { const c = id ? clauses.find(c => c.id === id) : undefined; return c ? clauseLabel(c) : 'Whole agreement' }
 
+const MANY = new Set(['forbidden', 'restrictive', 'ipScope'])
+/** Rules that can report several findings; every other rule has one, keyed by the rule alone. */
+const manyFindings = (pb: Playbook, ruleId: string) => MANY.has(pb.rules.find(r => r.id === ruleId)?.kind ?? '')
+/** What was found and in which clause (by title, which survives renumbering), so accepting one finding never covers another. */
+const findingKey = (ruleId: string, message: string, clause: string) => `${ruleId}:${message}@${clause.replace(/^(?:§|Art\.) \S+ (?=\S)/, '')}`
+
+interface Keyed { playbook: Playbook; versions: { issues: Issue[] }[]; conceded: string[]; notes: Record<string, string> }
+/**
+ * Moves concessions and notes saved under the old keys (rule id, or rule id and clause position) to what they were about,
+ * read from the stored issues. A concession that covered different findings over time is dropped, so they show as open.
+ */
+export function migrateKeys<T extends Keyed>(p: T): T {
+  const isOld = (k: string) => p.playbook.rules.some(r => MANY.has(r.kind) && k.startsWith(r.id) && /^(?::c\d+)?$/.test(k.slice(r.id.length)))
+  if (!p.conceded.some(isOld) && !Object.keys(p.notes).some(isOld) && !p.versions.some(v => v.issues.some(i => i.source === 'playbook' && isOld(i.key)))) return p
+  const now = new Map<string, string[]>()
+  const versions = p.versions.map(v => {
+    const seen = new Set<string>(), begun = new Set<string>()
+    return { ...v, issues: v.issues.map(i => {
+      const rule = i.source === 'playbook' ? p.playbook.rules.find(r => MANY.has(r.kind) && (i.key === r.id || i.key.startsWith(r.id + ':'))) : undefined
+      if (!rule) return i
+      const base = findingKey(rule.id, i.detail, i.clause)
+      let key = base
+      for (let n = 2; seen.has(key); n++) key = `${base}#${n}`
+      seen.add(key)
+      // Issues may be moved already when a concession saved by an older build arrives by sync.
+      const old = begun.has(rule.id) ? `${rule.id}:${i.clauseId}` : rule.id
+      begun.add(rule.id)
+      now.set(old, [...(now.get(old) ?? []), key])
+      return { ...i, key }
+    }) }
+  })
+  const conceded = [...new Set(p.conceded.flatMap(k => {
+    const to = new Set(isOld(k) ? now.get(k) : [])
+    return to.size === 0 ? [k] : to.size === 1 ? [...to] : []
+  }))]
+  const notes: Record<string, string> = {}
+  for (const [k, v] of Object.entries(p.notes)) {
+    const to = (isOld(k) && now.get(k)?.at(-1)) || k
+    notes[to] = notes[to] && notes[to] !== v ? `${notes[to]} ${v}` : v
+  }
+  return { ...p, versions, conceded, notes }
+}
+
 /** Issues in one version on its own (or relative to the previous version when given). */
 export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[], before?: XRef[]): Issue[] {
   const out: Issue[] = []
@@ -30,7 +73,11 @@ export function versionIssues(doc: Doc, pb: Playbook, prev?: Doc, pairs?: Pair[]
   for (const f of runPlaybook(pb, doc.clauses)) {
     if (f.status !== 'fail') continue
     let key = f.ruleId
-    if (seen.has(key)) key = `${f.ruleId}:${f.clauseId}`
+    if (manyFindings(pb, f.ruleId)) {
+      const base = findingKey(f.ruleId, f.message, f.clause)
+      key = base
+      for (let n = 2; seen.has(key); n++) key = `${base}#${n}`
+    }
     seen.add(key)
     out.push({ key, source: 'playbook', clauseId: f.clauseId, clause: f.clause, issue: f.rule, detail: f.message, severity: f.severity, fallback: f.fallback })
   }
