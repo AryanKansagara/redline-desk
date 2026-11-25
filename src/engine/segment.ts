@@ -25,6 +25,33 @@ const RE_LETTER = /^([a-z]|[ivx]{2,5})[.)]\s+(\S.*)$/
 const RE_CAPS = /^[A-Z][A-Z0-9 ,&'’()\-/]{2,79}$/
 const MINOR = new Set(['of', 'and', 'the', 'to', 'for', 'in', 'on', 'or', 'a', 'an', 'by', 'with', 'upon'])
 
+const ENDS = /[.:;!?]["”’')\]]*$/
+const CONNECTOR = /(?:,|\b(?:in|of|under|to|with|by|from|per|see|for|than|this|through|within|and\/or))$/i
+const REF_LIST = /\b(?:Sections?|Clauses?|Articles?|Paragraphs?|§§?)\s*\d[\d.()a-z, ]*(?:,|\b(?:and|or|to|through)|–|-)$/i
+
+/**
+ * True when a line that starts like "Section 5 of…" or "3.2 shall…" may be the rest of the sentence on the line before it
+ * (hard-wrapped text and PDF lines). `last` is the most recent clause number, when known: a dotted number that comes next
+ * in sequence is taken as a clause unless the line before ends inside a list of references.
+ */
+export function wrapsReference(before: string, line: string, last?: string | null): boolean {
+  if (!before || ENDS.test(before) || RE_CAPS.test(before)) return false
+  const art = line.match(RE_ART)
+  if (art) {
+    const rest = line.slice(line.indexOf(art[1]) + art[1].length)
+    return CONNECTOR.test(before) || REF_LIST.test(before) || /^(?:\s+[a-z]|\s*[,;)]|\s*\([a-z0-9]{1,4}\)\s*(?:[a-z,;]|$))/.test(rest)
+  }
+  const num = line.match(RE_NUM)
+  if (!num || !num[1].includes('.') || !/^[a-z,;)]/.test(num[3])) return false
+  if (REF_LIST.test(before)) return true
+  if (last === undefined) return true
+  if (last === null) return false
+  const L = last.split('.'), N = num[1].split('.')
+  const next = N.length === L.length + 1 ? N.at(-1) === '1' && L.every((x, i) => x === N[i])
+    : N.length <= L.length && N.slice(0, -1).every((x, i) => x === L[i]) && +N.at(-1)! === +L[N.length - 1] + 1
+  return !next
+}
+
 const isRoman = (s: string) => /^[ivx]+$/.test(s)
 
 /** "Limitation of Liability. Except..." -> ["Limitation of Liability", "Except..."] */
@@ -77,6 +104,7 @@ export function segment(text: string): Doc {
     if (!line) { cur?.parts.push(''); return }
     // "...the provisions of this Section" / "3.4 will apply." is a wrapped cross-reference, not a new clause.
     if (cur && REF_TAIL.test(lastText) && /^\d/.test(line)) { cur.parts.push(line); lastText = line; return }
+    if (cur && wrapsReference(before, line, lastNum)) { cur.parts.push(line); lastText = line; return }
     lastText = line
     let m: RegExpMatchArray | null
     if ((m = line.match(RE_ART))) {

@@ -46,7 +46,6 @@ test('#5 the cap rule reads multiples of a period and does not pass a bare amoun
 
 const WRAPPED = ['1. Term. The agreement ends as set out in', 'Section 5 of this Agreement and the fees under Sections 3.1 and', '3.2 shall apply.', '2. Fees. Customer pays.']
 test('#6 wrapped reference lines stay in their clause (pasted)', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await pasteText(page, WRAPPED.join('\n'))
   await expect(dialog(page).locator('.outline li').first()).toBeVisible()
@@ -54,7 +53,6 @@ test('#6 wrapped reference lines stay in their clause (pasted)', async ({ page }
 })
 
 test('#6 wrapped reference lines stay in their clause (PDF)', async ({ page }) => {
-  test.fail()
   await newMatter(page)
   await upload(page, pdf([WRAPPED]))
   await expect(dialog(page).locator('.outline li').first()).toBeVisible()
