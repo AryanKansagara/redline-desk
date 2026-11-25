@@ -62,7 +62,6 @@ test('#6 wrapped reference lines stay in their clause (PDF)', async ({ page }) =
 })
 
 test('#7 a deleted version leaves no text behind', async ({ page }) => {
-  test.fail()
   await matter(page, [`1. One. Kept words stay here.${other}`, `1. One. Removed secret words.${other}`])
   await tab(page, 'Versions')
   await page.locator('.timeline li').nth(1).getByRole('button', { name: 'Delete' }).click()
@@ -72,6 +71,21 @@ test('#7 a deleted version leaves no text behind', async ({ page }) => {
   const [, body] = await download(page, page.getByRole('button', { name: 'Export all my data (JSON)' }))
   expect(body.toString('utf8')).toContain('Kept words')
   expect(body.toString('utf8')).not.toContain('Removed secret words')
+})
+
+test('#7 undo brings the version and its text back in place', async ({ page }) => {
+  await matter(page, [`1. One. First words.${other}`, `1. One. Second words.${other}`])
+  await tab(page, 'Versions')
+  await page.locator('.timeline li').nth(0).getByRole('button', { name: 'Delete' }).click()
+  await dialog(page).getByRole('button', { name: 'Delete version' }).click()
+  await expect(page.locator('.timeline li')).toHaveCount(1)
+  await page.locator('.toasts').getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('.timeline li')).toHaveCount(2)
+  await expect(page.locator('.timeline li').first()).toContainText('v1')
+  await page.reload()
+  await tab(page, 'Compare')
+  await expect(clause(page, 'One').locator('del')).toHaveText(['First'])
+  await expect(clause(page, 'One').locator('ins')).toHaveText(['Second'])
 })
 
 test('#8 an unfixed stale reference stays open in later rounds', async ({ page }) => {
