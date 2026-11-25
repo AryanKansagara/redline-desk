@@ -26,7 +26,6 @@ test('#3 a capitalisation-only edit is a change', async ({ page }) => {
 })
 
 test('#4 a new clause at the cited number does not hide a stale reference', async ({ page }) => {
-  test.fail()
   const body = (n: number) => `${n}. Liability. Each party caps its liability at the yearly fees.\n${n + 1}. Insurance. Provider keeps cover in force at all times.\n${n + 2}. Remedies. See Section 1 for the limit that applies here.\n`
   await matter(page, [body(1), '1. Audit. Customer may inspect the books once every year.\n' + body(2)])
   await issuesReady(page)
