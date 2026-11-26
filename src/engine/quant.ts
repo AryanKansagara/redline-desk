@@ -1,7 +1,7 @@
 // Amounts, percentages, durations and dates found in clause text, and how they changed.
 
 export type QuantKind = 'money' | 'percent' | 'duration' | 'date' | 'multiple'
-export interface Quant { kind: QuantKind; raw: string; value: number; index: number }
+export interface Quant { kind: QuantKind; raw: string; value: number; index: number; currency?: string }
 export interface QuantChange { kind: QuantKind; before: string | null; after: string | null }
 
 const NUM_WORDS: Record<string, number> = {
@@ -19,7 +19,9 @@ export function parseNumber(s: string): number | null {
 const UNIT_DAYS: Record<string, number> = { day: 1, days: 1, 'business day': 1.4, 'business days': 1.4, 'calendar day': 1, 'calendar days': 1, week: 7, weeks: 7, month: 30, months: 30, year: 365, years: 365 }
 const MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December'
 
-const RE_MONEY = /(?:US)?[$€£]\s?\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:\s?(?:million|thousand|billion|[MK]\b))?|\b(?:USD|EUR|GBP)\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|thousand|billion))?/g
+// Commas count only as thousands (also Indian 1,00,000) separators: "€500,00" is five hundred.
+const AMOUNT = String.raw`\d+(?:(?:,\d{2,3})*,\d{3})?(?:\.\d+)?(?:\s?(?:million|thousand|billion|(?:bn|mm?|k)\b))?`
+export const RE_MONEY = new RegExp(String.raw`(?:US)?[$€£]\s?${AMOUNT}|\b(?:USD|EUR|GBP)\s?${AMOUNT}`, 'gi')
 const RE_PCT = /\b\d+(?:\.\d+)?\s?(?:%|percent\b)/g
 const RE_DUR = /\b(\d+|one hundred (?:twenty|eighty)|[a-z]+(?:-[a-z]+)?)\s*(?:\((\d+)\)\s*)?(business days?|calendar days?|days?|weeks?|months?|years?)\b/gi
 const RE_DATE = new RegExp(`\\b(?:(?:${MONTHS})\\s+\\d{1,2},\\s+\\d{4}|\\d{1,2}\\s+(?:${MONTHS})\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2})\\b`, 'g')
@@ -27,9 +29,11 @@ const RE_MULT = /\b(\d+(?:\.\d+)?|[a-z]+)\s*(?:\((\d+(?:\.\d+)?)\)\s*)?(?:times|
 
 export function moneyValue(raw: string): number {
   const n = Number(raw.replace(/[^\d.]/g, ''))
-  const mult = /billion/i.test(raw) ? 1e9 : /million|M\b/.test(raw) ? 1e6 : /thousand|K\b/.test(raw) ? 1e3 : 1
+  const mult = /(?:billion|bn)$/i.test(raw) ? 1e9 : /(?:million|\dm|\smm?|\dmm)$/i.test(raw) ? 1e6 : /(?:thousand|k)$/i.test(raw) ? 1e3 : 1
   return n * mult
 }
+
+const currencyOf = (raw: string) => /€|EUR/i.test(raw) ? 'EUR' : /£|GBP/i.test(raw) ? 'GBP' : 'USD'
 
 /** Duration in days, or null if the phrase is not a duration ("of months"). */
 export function durationDays(num: string, paren: string | undefined, unit: string): number | null {
@@ -40,7 +44,7 @@ export function durationDays(num: string, paren: string | undefined, unit: strin
 
 export function quantities(text: string): Quant[] {
   const out: Quant[] = []
-  for (const m of text.matchAll(RE_MONEY)) out.push({ kind: 'money', raw: m[0].trim(), value: moneyValue(m[0]), index: m.index! })
+  for (const m of text.matchAll(RE_MONEY)) out.push({ kind: 'money', raw: m[0].trim(), value: moneyValue(m[0]), index: m.index!, currency: currencyOf(m[0]) })
   for (const m of text.matchAll(RE_PCT)) out.push({ kind: 'percent', raw: m[0], value: parseFloat(m[0]), index: m.index! })
   for (const m of text.matchAll(RE_DUR)) {
     const d = durationDays(m[1], m[2], m[3])
@@ -61,9 +65,10 @@ export function quantChanges(before: string, after: string): QuantChange[] {
   for (const kind of ['money', 'percent', 'duration', 'date', 'multiple'] as QuantKind[]) {
     const xa = a.filter(q => q.kind === kind), xb = b.filter(q => q.kind === kind)
     // Remove values present in both (multiset), keep order.
+    const id = (q: Quant) => `${q.currency ?? ''}${q.value}`
     const rest = (xs: Quant[], ys: Quant[]) => {
-      const pool = ys.map(y => y.value)
-      return xs.filter(x => { const i = pool.indexOf(x.value); if (i >= 0) { pool.splice(i, 1); return false } return true })
+      const pool = ys.map(id)
+      return xs.filter(x => { const i = pool.indexOf(id(x)); if (i >= 0) { pool.splice(i, 1); return false } return true })
     }
     const ra = rest(xa, xb), rb = rest(xb, xa)
     for (let i = 0; i < Math.max(ra.length, rb.length); i++) out.push({ kind, before: ra[i]?.raw ?? null, after: rb[i]?.raw ?? null })

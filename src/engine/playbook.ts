@@ -1,5 +1,5 @@
 // Playbook rules: user-editable checks per contract type, each with a severity and fallback language.
-import { durationDays, moneyValue, parseNumber } from './quant.ts'
+import { durationDays, moneyValue, parseNumber, RE_MONEY } from './quant.ts'
 import { clauseLabel, type Clause } from './segment.ts'
 
 export type Severity = 'high' | 'medium' | 'low'
@@ -46,7 +46,7 @@ export function parseCap(text: string): { months?: number; amount?: number; raw:
     const d = firstDuration(text.slice(fees, fees + 220))
     if (d) return { months: months(d.days), raw: text.slice(fees, fees + 220).split(/[.;]/)[0] }
   }
-  const money = text.match(/(?:US)?[$€£]\s?\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:\s?(?:million|thousand))?/)
+  const money = text.match(new RegExp(RE_MONEY.source, 'i'))
   if (money) return { amount: moneyValue(money[0]), raw: money[0] }
   return null
 }

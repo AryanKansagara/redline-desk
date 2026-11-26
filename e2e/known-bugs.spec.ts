@@ -9,7 +9,6 @@ const ready = (page: Page) => expect(page.locator('.cmp')).toBeVisible()
 const issuesReady = async (page: Page) => { await tab(page, 'Issues'); await expect(page.locator('table.issues')).toBeVisible() }
 
 test('#2 amounts: unseparated digits, unit words and currency', async ({ page }) => {
-  test.fail()
   const t = (a: string, b: string, c: string) => `1. Fees. Customer pays ${a} each year, plus ${b} on signing and ${c} on exit.${other}`
   await matter(page, [t('$50000', '$5 Million', '$100'), t('$50090', '$5 Thousand', '€100')])
   await ready(page)
