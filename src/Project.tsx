@@ -7,7 +7,7 @@ import { termReport } from './engine/terms.ts'
 import { checkRefs } from './engine/xref.ts'
 import { ImportVersion } from './Import.tsx'
 import { addVersion, recomputeIssues, useComparison, useProject, useTracker } from './projectData.ts'
-import { putData, saveProject, uuid, type Project } from './store.ts'
+import { getData, getProject, putData, saveProject, uuid, type Project, type VersionMeta } from './store.ts'
 import { deleteSnapshotCloud, RAW_SYNC_LIMIT } from './sync.ts'
 import { ask, download, Empty, go, isTyping, Link, Modal, NotFound, SyntheticBadge, toast } from './ui.tsx'
 
@@ -294,6 +294,14 @@ function TermsTab({ cmp, text }: { cmp: Comparison | null; text: string | undefi
 
 // ---------- Versions ----------
 
+/** Undo of a delete: puts the version and its text back, keeping anything that changed in the meantime. */
+async function restoreVersion(id: string, v: VersionMeta, at: number, text: string | undefined) {
+  const cur = getProject(id)
+  if (!cur || cur.versions.some(x => x.id === v.id)) return
+  if (text !== undefined) await putData(id, { ...await getData(id), [v.id]: text })
+  await saveProject({ ...cur, versions: cur.versions.toSpliced(at, 0, v) })
+}
+
 function VersionsTab({ p, texts }: { p: Project; texts: Record<string, string> }) {
   const size = Object.values(texts).reduce((n, t) => n + t.length, 0)
   return (
@@ -309,9 +317,11 @@ function VersionsTab({ p, texts }: { p: Project; texts: Record<string, string> }
                 {texts[v.id] !== undefined && <button type="button" className="btn ghost sm" onClick={() => download(`${v.label}.txt`, texts[v.id], 'text/plain')}>Text</button>}
                 {!p.sampleId && <button type="button" className="btn danger-ghost sm" onClick={async () => {
                   if (!(await ask(`Delete ${v.label}?`, 'Removes this version and its issue list. You can undo for a few seconds.', 'Delete version'))) return
-                  const prev = p
+                  // Text first: the matter re-reads its texts when the version list changes.
+                  const { [v.id]: text, ...rest } = await getData(p.id) ?? texts
+                  await putData(p.id, rest)
                   await saveProject({ ...p, versions: p.versions.filter(x => x.id !== v.id) })
-                  toast(`Deleted ${v.label}`, { undo: () => void saveProject(prev) })
+                  toast(`Deleted ${v.label}`, { undo: () => void restoreVersion(p.id, v, i, text) })
                   setTimeout(() => void deleteSnapshotCloud(v.id), 9000)
                 }}>Delete</button>}
               </div>
