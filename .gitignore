@@ -6,3 +6,8 @@ dist
 .env.local
 qa-fixtures
 .env*
+
+# Playwright
+/test-results
+/playwright-report
+/blob-report
